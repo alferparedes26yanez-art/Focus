@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { describeSecretKeyProblem } from "./secret-key";
+
 // Server-only configuration. Parsed lazily so `next build` works without
 // secrets; a missing value fails the first request that needs it.
 
@@ -40,6 +42,12 @@ export function getSupabaseSecretKey(): string {
   const key = emptyToUndefined(process.env.SUPABASE_SECRET_KEY);
   if (!key) {
     throw new Error("Falta la variable de entorno SUPABASE_SECRET_KEY. Revisa .env.local.");
+  }
+  const problem = describeSecretKeyProblem(key);
+  if (problem) {
+    throw new Error(
+      `SUPABASE_SECRET_KEY ${problem}. Copia la "Secret key" (sb_secret_...) desde Supabase → Project Settings → API Keys.`,
+    );
   }
   return key;
 }
