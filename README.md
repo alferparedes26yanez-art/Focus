@@ -40,14 +40,16 @@ Necesitas Node.js 20.9 o superior (recomendado 22) y una cuenta en Supabase y en
 4. *Authentication → URL Configuration*:
    - **Site URL:** `http://localhost:3000` (en producción, la URL de Vercel).
    - **Redirect URLs:** `http://localhost:3000/auth/confirm` y `https://TU-APP.vercel.app/auth/confirm`.
-5. *Authentication → Emails → Templates*: copia el contenido de
-   [`supabase/templates/confirmation.html`](supabase/templates/confirmation.html) en **Confirm signup** y
-   [`supabase/templates/recovery.html`](supabase/templates/recovery.html) en **Reset password**. Así los enlaces
-   funcionan aunque abras el correo en otro dispositivo.
+5. **Para probar:** en *Authentication → Sign In / Providers → Email* desactiva **Confirm email**; así entras
+   directo al registrarte. Con la confirmación activada y el correo por defecto de Supabase, el enlace del correo
+   debe abrirse en el mismo navegador donde te registraste.
 6. *Project Settings → API Keys*: copia la URL, la clave publicable y la clave secreta.
 
-> El servicio de correo incluido en Supabase envía pocos correos por hora. Para usar Focus con muchas personas,
-> configura un SMTP propio en *Authentication → Emails → SMTP Settings*.
+> **Antes de abrirla a más personas:** el correo incluido en Supabase envía muy pocos correos por hora y, en general,
+> solo a los miembros de tu organización. Configura un SMTP propio (por ejemplo Resend) con *Set up SMTP* en
+> *Authentication → Emails*. Luego pega [`supabase/templates/confirmation.html`](supabase/templates/confirmation.html)
+> en **Confirm signup** y [`supabase/templates/recovery.html`](supabase/templates/recovery.html) en **Reset password**
+> (los enlaces funcionarán aunque el correo se abra en otro dispositivo) y vuelve a activar **Confirm email**.
 
 ### 2. Gemini
 
