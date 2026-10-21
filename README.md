@@ -1,36 +1,112 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Focus
 
-## Getting Started
+App web (mobile-first) para que estudiantes universitarios organicen y estudien sus materias con ayuda de IA.
+Especificación: [SPEC.md](SPEC.md) · Reglas del proyecto: [CLAUDE.md](CLAUDE.md).
 
-First, run the development server:
+**Estado:** Fase 1 (base y sílabo) — registro, materias, sílabo con IA → revisión → unidades, temas y fechas; inicio con
+próximos exámenes; ajustes con el consumo de IA.
+
+Stack: Next.js 16 (App Router, Cache Components) · TypeScript · Tailwind 4 + shadcn/ui · Supabase (Auth, Postgres,
+Storage) · Gemini (`@google/genai`) · zod.
+
+---
+
+## Puesta en marcha
+
+Necesitas Node.js 20.9 o superior (recomendado 22) y una cuenta en Supabase y en Google AI Studio.
+
+### 1. Supabase
+
+1. Crea un proyecto en <https://supabase.com/dashboard> (el plan gratis alcanza).
+2. Aplica las migraciones de `supabase/migrations` (crean tablas, políticas RLS, funciones y el bucket `syllabi`).
+   Con la CLI (incluida en el proyecto):
+   ```bash
+   npx supabase login
+   npx supabase link --project-ref TU_PROJECT_REF
+   npx supabase db push
+   ```
+   Alternativa sin CLI: pega cada archivo de `supabase/migrations`, **en orden**, en *SQL Editor* y ejecútalo.
+3. **Habilita tu correo para registrarte.** El registro está cerrado por defecto para proteger tu presupuesto de IA.
+   En *SQL Editor*:
+   ```sql
+   insert into public.signup_allowlist (pattern) values ('tu-correo@gmail.com');
+   ```
+   Cuando la lances en tu universidad, puedes habilitar todo el dominio o abrir el registro:
+   ```sql
+   insert into public.signup_allowlist (pattern) values ('@tu-universidad.edu.ec');  -- un dominio
+   insert into public.signup_allowlist (pattern) values ('*');                       -- cualquiera
+   ```
+4. *Authentication → URL Configuration*:
+   - **Site URL:** `http://localhost:3000` (en producción, la URL de Vercel).
+   - **Redirect URLs:** `http://localhost:3000/auth/confirm` y `https://TU-APP.vercel.app/auth/confirm`.
+5. *Authentication → Emails → Templates*: copia el contenido de
+   [`supabase/templates/confirmation.html`](supabase/templates/confirmation.html) en **Confirm signup** y
+   [`supabase/templates/recovery.html`](supabase/templates/recovery.html) en **Reset password**. Así los enlaces
+   funcionan aunque abras el correo en otro dispositivo.
+6. *Project Settings → API Keys*: copia la URL, la clave publicable y la clave secreta.
+
+> El servicio de correo incluido en Supabase envía pocos correos por hora. Para usar Focus con muchas personas,
+> configura un SMTP propio en *Authentication → Emails → SMTP Settings*.
+
+### 2. Gemini
+
+Crea una clave en <https://aistudio.google.com/apikey> dentro de tu proyecto de Google Cloud con facturación activa.
+Elige los modelos en `.env.local`; si usas uno que no esté en [`src/lib/ai/pricing.ts`](src/lib/ai/pricing.ts),
+agrega su precio (si no, el gasto se estima con la tarifa más alta).
+
+### 3. Variables de entorno
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local   # y completa los valores
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 4. Correr la app
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev        # http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 5. Publicar en Vercel
 
-## Learn More
+Importa el repositorio en Vercel, carga las mismas variables (con `NEXT_PUBLIC_SITE_URL` = la URL de producción) y
+actualiza *Site URL* y *Redirect URLs* en Supabase con esa URL.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Cómo probar la Fase 1
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Regístrate con el correo habilitado y abre el enlace del correo de confirmación.
+2. El onboarding te pide crear una materia (nombre, color, ícono, docente).
+3. Sube el sílabo (PDF, Word .docx o fotos de cada página) → la IA lo lee (10–40 s).
+4. En la revisión corrige unidades, temas (clic para editar, arrastrar para ordenar), evaluaciones, fechas,
+   ponderaciones, docente y bibliografía → **Confirmar y guardar**.
+5. La materia queda con sus pestañas **Temas** y **Evaluaciones**; el inicio muestra las próximas fechas.
+6. Para cargar otro sílabo: menú ⋯ de la materia → **Vaciar para subir otro sílabo**.
+7. *Ajustes* muestra el gasto de IA del mes frente al presupuesto.
 
-## Deploy on Vercel
+## Comandos
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Comando | Qué hace |
+| --- | --- |
+| `npm run dev` | Servidor de desarrollo |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | Tipos de rutas + TypeScript |
+| `npm test` | Pruebas unitarias (Vitest) |
+| `npm run build` | Build de producción |
+| `npm run db:test` | Aplica las migraciones en un Postgres temporal y prueba las políticas RLS (requiere Postgres instalado) |
+| `npm run db:types` | Regenera `src/types/database.ts` desde las migraciones |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Estructura
+
+```
+supabase/migrations   esquema, RLS, funciones y bucket (única forma de cambiar la base de datos)
+supabase/templates    plantillas de correo (confirmación y recuperación)
+scripts/db            pruebas de RLS y generación de tipos sobre un Postgres local
+src/proxy.ts          refresca la sesión y protege las rutas
+src/app               (auth) acceso · (app) pantallas · api/syllabus lectura del sílabo
+src/components        ui (shadcn) · structure (editor de temas) · syllabus · events · subjects · settings
+src/lib/ai            cliente único de Gemini: presupuesto, reintentos 429, cola, registro en ai_usage, prompts
+src/lib/syllabus      archivos aceptados, preparación para Gemini, normalización y esquemas zod
+src/lib/actions       Server Actions · src/lib/data: lecturas para las páginas
+```
