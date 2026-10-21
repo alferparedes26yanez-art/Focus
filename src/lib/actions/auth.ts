@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { ConfigError } from "@/lib/env/config-error";
 import { getSiteUrl } from "@/lib/env/public";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -17,6 +18,14 @@ function text(formData: FormData, name: string) {
   return typeof value === "string" ? value : "";
 }
 
+// While the app is being set up, say which variable is wrong instead of a
+// generic error. Config messages never include the values themselves.
+function setupError(error: unknown, fallback: string): string {
+  if (error instanceof ConfigError) return `La app no está bien configurada. ${error.message}`;
+  console.error("[auth]", error);
+  return fallback;
+}
+
 export async function signIn(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = z
     .object({ email: emailSchema, password: z.string().min(1, "Escribe tu contraseña") })
@@ -25,7 +34,15 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
     return { fieldErrors: fieldErrorsFrom(parsed.error.issues), values: { email: text(formData, "email") } };
   }
 
-  const supabase = await createClient();
+  let supabase;
+  try {
+    supabase = await createClient();
+  } catch (error) {
+    return {
+      error: setupError(error, "No pudimos iniciar sesión. Inténtalo de nuevo en un momento."),
+      values: { email: parsed.data.email },
+    };
+  }
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) {
     const message =
@@ -64,7 +81,7 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
     allowed = data === true;
   } catch (error) {
     console.error("[auth] allowlist check failed:", error);
-    return { error: "No pudimos crear tu cuenta en este momento. Inténtalo más tarde.", values };
+    return { error: setupError(error, "No pudimos crear tu cuenta en este momento. Inténtalo más tarde."), values };
   }
   if (!allowed) {
     return {
@@ -111,9 +128,16 @@ export async function requestPasswordReset(_prev: FormState, formData: FormData)
     return { fieldErrors: { email: "Correo no válido" }, values: { email: text(formData, "email") } };
   }
 
-  const supabase = await createClient();
+  let supabase;
+  let siteUrl;
+  try {
+    supabase = await createClient();
+    siteUrl = getSiteUrl();
+  } catch (error) {
+    return { error: setupError(error, "No pudimos enviar el enlace. Inténtalo más tarde."), values: { email: parsed.data } };
+  }
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, {
-    redirectTo: `${getSiteUrl()}/auth/confirm?next=/reset-password`,
+    redirectTo: `${siteUrl}/auth/confirm?next=/reset-password`,
   });
   if (error && error.code === "over_email_send_rate_limit") {
     return { error: "Se enviaron demasiados correos. Espera unos minutos.", values: { email: parsed.data } };

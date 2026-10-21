@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { ConfigError } from "./config-error";
 import { describeSecretKeyProblem } from "./secret-key";
 
 // Server-only configuration. Parsed lazily so `next build` works without
@@ -33,7 +34,7 @@ export function getAiEnv(): AiEnv {
   });
   if (!parsed.success) {
     const names = parsed.error.issues.map((issue) => issue.path.join(".")).join(", ");
-    throw new Error(`Configuración de IA incompleta o inválida: ${names}. Revisa .env.local.`);
+    throw new ConfigError(`Configuración de IA incompleta o inválida: ${names}. Revisa .env.local o las variables de Vercel.`);
   }
   return parsed.data;
 }
@@ -41,11 +42,11 @@ export function getAiEnv(): AiEnv {
 export function getSupabaseSecretKey(): string {
   const key = emptyToUndefined(process.env.SUPABASE_SECRET_KEY);
   if (!key) {
-    throw new Error("Falta la variable de entorno SUPABASE_SECRET_KEY. Revisa .env.local.");
+    throw new ConfigError("Falta la variable de entorno SUPABASE_SECRET_KEY. Revisa .env.local o las variables de Vercel.");
   }
   const problem = describeSecretKeyProblem(key);
   if (problem) {
-    throw new Error(
+    throw new ConfigError(
       `SUPABASE_SECRET_KEY ${problem}. Copia la "Secret key" (sb_secret_...) desde Supabase → Project Settings → API Keys.`,
     );
   }
