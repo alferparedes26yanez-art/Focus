@@ -17,7 +17,8 @@ Necesitas Node.js 20.9 o superior (recomendado 22) y una cuenta en Supabase y en
 
 ### 1. Supabase
 
-1. Crea un proyecto en <https://supabase.com/dashboard> (el plan gratis alcanza).
+1. Crea un proyecto en <https://supabase.com/dashboard> (el plan gratis alcanza). Deja activada la **Data API**: la
+   app la usa para leer y guardar datos.
 2. Aplica las migraciones de `supabase/migrations` (crean tablas, políticas RLS, funciones y el bucket `syllabi`).
    Con la CLI (incluida en el proyecto):
    ```bash
