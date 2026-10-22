@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isMissingTable } from "@/lib/data/errors";
 import type { ServerSupabase } from "@/lib/supabase/server";
 import { storedFileSchema } from "@/lib/syllabus/prepare-files";
 
@@ -15,7 +16,8 @@ export async function removeMaterialFiles(
   let query = supabase.from("materials").select("files").eq("storage_bucket", MATERIALS_BUCKET);
   query = "subjectId" in filter ? query.eq("subject_id", filter.subjectId) : query.in("id", filter.materialIds);
   const { data, error } = await query;
-  if (error) return false;
+  // Before the material migration there are no material files to remove.
+  if (error) return isMissingTable(error);
 
   const paths = data.flatMap((row) => {
     const files = storedFileSchema.array().safeParse(row.files);

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { requireUser } from "@/lib/auth";
+import { toDataError } from "@/lib/data/errors";
 import { storedFileSchema } from "@/lib/syllabus/prepare-files";
 import type { MaterialView } from "@/lib/materials/types";
 
@@ -14,7 +15,7 @@ export async function getSubjectMaterials(subjectId: string): Promise<MaterialVi
     .select(LIST_COLUMNS)
     .eq("subject_id", subjectId)
     .order("created_at", { ascending: true });
-  if (error) throw new Error(error.message);
+  if (error) throw toDataError(error);
   return data as MaterialView[];
 }
 
@@ -42,7 +43,7 @@ export async function getMaterialDetail(subjectId: string, materialId: string, f
     .eq("id", materialId)
     .eq("subject_id", subjectId)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throw toDataError(error);
   if (!material || !material.subject) return null;
 
   const paged = material.kind === "pdf" || material.kind === "pptx" || material.kind === "images";

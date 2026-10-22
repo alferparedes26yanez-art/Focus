@@ -11,12 +11,14 @@ import { PageSkeleton } from "@/components/home/home-skeleton";
 import { MaterialProcessor } from "@/components/materials/material-processor";
 import { SubjectMaterials } from "@/components/materials/subject-materials";
 import { EmptyState } from "@/components/shared/empty-state";
+import { SetupNotice } from "@/components/shared/setup-notice";
 import { SubjectStructure } from "@/components/structure/subject-structure";
 import { SubjectHeader } from "@/components/subjects/subject-header";
 import { SUBJECT_TABS, SubjectTabs } from "@/components/subjects/subject-tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { getChatThreads } from "@/lib/data/chat";
+import { MissingTableError } from "@/lib/data/errors";
 import { getSubjectMaterials } from "@/lib/data/materials";
 import { getProfile, getSubjectDetail, type SubjectDetail } from "@/lib/data/subjects";
 import type { MaterialView } from "@/lib/materials/types";
@@ -35,14 +37,14 @@ async function SubjectContent({ params, searchParams }: PageProps<"/subjects/[su
   const { subjectId } = await params;
   if (!z.uuid().safeParse(subjectId).success) notFound();
 
-  const [subject, profile, query, materials, threads] = await Promise.all([
+  const [subject, profile, query, library] = await Promise.all([
     getSubjectDetail(subjectId),
     getProfile(),
     searchParams,
-    getSubjectMaterials(subjectId),
-    getChatThreads(subjectId),
+    getLibrary(subjectId),
   ]);
   if (!subject) notFound();
+  const { materials, threads } = library;
 
   const materialCounts: Record<string, number> = {};
   for (const material of materials) {
@@ -100,14 +102,24 @@ async function SubjectContent({ params, searchParams }: PageProps<"/subjects/[su
         materialCount={materials.length}
         eventCount={subject.events.length}
         topics={topics}
-        materials={<SubjectMaterials subjectId={subject.id} units={subject.units} materials={materials} />}
+        materials={
+          library.ready ? (
+            <SubjectMaterials subjectId={subject.id} units={subject.units} materials={materials} />
+          ) : (
+            <SetupNotice migrations={PHASE_2_MIGRATIONS} />
+          )
+        }
         chat={
-          <SubjectChat
-            subjectId={subject.id}
-            threads={threads}
-            hasMaterial={materials.some((material) => material.processed_units > 0)}
-            suggestions={chatSuggestions(subject, materials)}
-          />
+          library.ready ? (
+            <SubjectChat
+              subjectId={subject.id}
+              threads={threads}
+              hasMaterial={materials.some((material) => material.processed_units > 0)}
+              suggestions={chatSuggestions(subject, materials)}
+            />
+          ) : (
+            <SetupNotice migrations={PHASE_2_MIGRATIONS} />
+          )
         }
         events={
           <SubjectEvents
@@ -120,6 +132,21 @@ async function SubjectContent({ params, searchParams }: PageProps<"/subjects/[su
       />
     </div>
   );
+}
+
+const PHASE_2_MIGRATIONS = ["20261022000700_materials.sql", "20261022000800_chat.sql"];
+
+// Material and chat need the Phase 2 migrations; without them the rest of the
+// subject still works and those tabs explain what to run.
+async function getLibrary(subjectId: string) {
+  try {
+    const [materials, threads] = await Promise.all([getSubjectMaterials(subjectId), getChatThreads(subjectId)]);
+    return { ready: true, materials, threads };
+  } catch (error) {
+    if (!(error instanceof MissingTableError)) throw error;
+    console.error("[subject] Phase 2 tables are missing:", error.message);
+    return { ready: false, materials: [] as MaterialView[], threads: [] };
+  }
 }
 
 // Starting questions for an empty chat, from the subject's own content.
