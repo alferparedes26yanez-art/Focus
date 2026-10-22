@@ -56,9 +56,12 @@ export function ClearSubjectDialog({
                 <li>unidades y temas</li>
                 <li>exámenes, entregas y demás evaluaciones</li>
                 <li>datos del docente y bibliografía</li>
-                <li>los archivos del sílabo subidos</li>
+                <li>el sílabo subido (también de la biblioteca de material)</li>
               </ul>
-              <p>Se conservan el nombre, el color y el ícono. No se puede deshacer.</p>
+              <p>
+                Se conservan el nombre, el color, el ícono y el resto de tu material, que se volverá a ordenar con el
+                sílabo nuevo. No se puede deshacer.
+              </p>
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>

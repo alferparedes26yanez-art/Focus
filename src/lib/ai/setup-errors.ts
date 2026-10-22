@@ -2,18 +2,20 @@
 // API not enabled) into a message that says what to change. Returns null for
 // any other error.
 
-export type ModelTier = "main" | "fast" | "deep";
+export type ModelTier = "main" | "fast" | "deep" | "embedding";
 
 export const MODEL_ENV_NAMES: Record<ModelTier, string> = {
   main: "AI_MODEL_MAIN",
   fast: "AI_MODEL_FAST",
   deep: "AI_MODEL_DEEP",
+  embedding: "AI_MODEL_EMBEDDING",
 };
 
 const SUGGESTED_MODELS: Record<ModelTier, string> = {
   main: "gemini-3.8-flash",
   fast: "gemini-3.5-flash-lite",
   deep: "un modelo Pro vigente",
+  embedding: "gemini-embedding-001",
 };
 
 export function describeGeminiSetupError(

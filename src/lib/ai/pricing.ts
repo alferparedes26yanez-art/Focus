@@ -20,6 +20,8 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   "gemini-2.5-pro": { input: 1.25, output: 10 },
   "gemini-2.5-flash": { input: 0.3, output: 2.5 },
   "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
+  "gemini-embedding-001": { input: 0.15, output: 0 },
+  "gemini-embedding-2": { input: 0.2, output: 0 },
 };
 
 // Unknown models are estimated with the most expensive known price so the
@@ -46,4 +48,18 @@ export function estimateCostUsd(model: string, inputTokens: number, outputTokens
   const { price } = getModelPrice(model);
   const cost = (inputTokens * price.input + outputTokens * price.output) / 1_000_000;
   return Math.round(cost * 1_000_000) / 1_000_000;
+}
+
+// Video read at low resolution and 0.5 frames per second: about 65 input
+// tokens per second (frames + audio) and ~8 output tokens per second of
+// transcript. Used to show the estimated cost before transcribing.
+export const VIDEO_INPUT_TOKENS_PER_SECOND = 65;
+export const VIDEO_OUTPUT_TOKENS_PER_SECOND = 8;
+
+export function estimateVideoCostUsd(model: string, seconds: number): number {
+  return estimateCostUsd(
+    model,
+    Math.round(seconds * VIDEO_INPUT_TOKENS_PER_SECOND),
+    Math.round(seconds * VIDEO_OUTPUT_TOKENS_PER_SECOND),
+  );
 }

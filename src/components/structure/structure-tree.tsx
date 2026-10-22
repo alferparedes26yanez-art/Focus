@@ -24,12 +24,14 @@ import {
   ChevronRight,
   Ellipsis,
   GripVertical,
+  Library,
   Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { createContext, useContext, useId, useState } from "react";
 
+import { useMenuFollowUp } from "@/components/shared/use-menu-follow-up";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -97,24 +99,8 @@ function reorderedIds(ids: string[], event: DragEndEvent): string[] | null {
   return arrayMove(ids, from, to);
 }
 
-// Menu items that open an input must wait until the menu has closed and
-// released focus; otherwise the menu takes focus back and the input closes.
-function useMenuFollowUp<K extends string>(actions: Record<K, () => void>) {
-  const queued = useRef<K | null>(null);
-  return {
-    queue: (key: K) => {
-      queued.current = key;
-    },
-    onCloseAutoFocus: (event: Event) => {
-      const key = queued.current;
-      queued.current = null;
-      if (key) {
-        event.preventDefault();
-        actions[key]();
-      }
-    },
-  };
-}
+// Number of materials filed under each topic (shown next to its title).
+export const TopicMaterialCounts = createContext<Record<string, number>>({});
 
 const menuTriggerClass = cn(
   buttonVariants({ variant: "ghost", size: "icon-sm" }),
@@ -378,6 +364,7 @@ function SortableTopic({
   const [renaming, setRenaming] = useState(false);
   const afterMenu = useMenuFollowUp({ rename: () => setRenaming(true) });
   const otherUnits = units.filter((unit) => unit.id !== unitId && !isTempId(unit.id));
+  const materialCount = useContext(TopicMaterialCounts)[topic.id] ?? 0;
 
   return (
     <li
@@ -415,6 +402,16 @@ function SortableTopic({
           <p className="line-clamp-2 px-2 pb-1 text-xs text-muted-foreground">{topic.description}</p>
         ) : null}
       </div>
+      {materialCount > 0 ? (
+        <span
+          className="mt-1.5 flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums"
+          title={materialCount === 1 ? "1 material" : `${materialCount} materiales`}
+        >
+          <Library className="size-3.5" />
+          {materialCount}
+          <span className="sr-only">{materialCount === 1 ? "material" : "materiales"}</span>
+        </span>
+      ) : null}
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger className={menuTriggerClass} disabled={pending} aria-label="Opciones del tema">
           <Ellipsis className="size-4" />

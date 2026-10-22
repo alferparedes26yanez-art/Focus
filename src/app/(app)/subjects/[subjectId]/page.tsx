@@ -5,15 +5,21 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { z } from "zod";
 
+import { SubjectChat } from "@/components/chat/subject-chat";
 import { SubjectEvents } from "@/components/events/subject-events";
 import { PageSkeleton } from "@/components/home/home-skeleton";
+import { MaterialProcessor } from "@/components/materials/material-processor";
+import { SubjectMaterials } from "@/components/materials/subject-materials";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SubjectStructure } from "@/components/structure/subject-structure";
 import { SubjectHeader } from "@/components/subjects/subject-header";
-import { SubjectTabs } from "@/components/subjects/subject-tabs";
+import { SUBJECT_TABS, SubjectTabs } from "@/components/subjects/subject-tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { getProfile, getSubjectDetail } from "@/lib/data/subjects";
+import { getChatThreads } from "@/lib/data/chat";
+import { getSubjectMaterials } from "@/lib/data/materials";
+import { getProfile, getSubjectDetail, type SubjectDetail } from "@/lib/data/subjects";
+import type { MaterialView } from "@/lib/materials/types";
 
 export const metadata: Metadata = { title: "Materia" };
 
@@ -29,15 +35,30 @@ async function SubjectContent({ params, searchParams }: PageProps<"/subjects/[su
   const { subjectId } = await params;
   if (!z.uuid().safeParse(subjectId).success) notFound();
 
-  const [subject, profile, query] = await Promise.all([getSubjectDetail(subjectId), getProfile(), searchParams]);
+  const [subject, profile, query, materials, threads] = await Promise.all([
+    getSubjectDetail(subjectId),
+    getProfile(),
+    searchParams,
+    getSubjectMaterials(subjectId),
+    getChatThreads(subjectId),
+  ]);
   if (!subject) notFound();
+
+  const materialCounts: Record<string, number> = {};
+  for (const material of materials) {
+    if (material.topic_id) materialCounts[material.topic_id] = (materialCounts[material.topic_id] ?? 0) + 1;
+  }
+  const pendingIds = materials
+    .filter((material) => material.status === "queued" || material.status === "processing")
+    .map((material) => material.id);
+  const tab = SUBJECT_TABS.find((value) => value === query.tab) ?? "temas";
 
   const syllabusUrl = `/subjects/${subject.id}/syllabus`;
   const reviewReady = subject.pendingImport?.status === "review";
 
   const topics =
     subject.units.length > 0 ? (
-      <SubjectStructure subjectId={subject.id} units={subject.units} />
+      <SubjectStructure subjectId={subject.id} units={subject.units} materialCounts={materialCounts} />
     ) : (
       <div className="grid gap-4">
         {reviewReady ? (
@@ -73,10 +94,21 @@ async function SubjectContent({ params, searchParams }: PageProps<"/subjects/[su
   return (
     <div className="grid gap-6">
       <SubjectHeader subject={subject} />
+      <MaterialProcessor pendingIds={pendingIds} />
       <SubjectTabs
-        defaultTab={query.tab === "evaluaciones" ? "evaluaciones" : "temas"}
+        defaultTab={tab}
+        materialCount={materials.length}
         eventCount={subject.events.length}
         topics={topics}
+        materials={<SubjectMaterials subjectId={subject.id} units={subject.units} materials={materials} />}
+        chat={
+          <SubjectChat
+            subjectId={subject.id}
+            threads={threads}
+            hasMaterial={materials.some((material) => material.processed_units > 0)}
+            suggestions={chatSuggestions(subject, materials)}
+          />
+        }
         events={
           <SubjectEvents
             subjectId={subject.id}
@@ -88,4 +120,16 @@ async function SubjectContent({ params, searchParams }: PageProps<"/subjects/[su
       />
     </div>
   );
+}
+
+// Starting questions for an empty chat, from the subject's own content.
+function chatSuggestions(subject: SubjectDetail, materials: MaterialView[]): string[] {
+  const suggestions: string[] = [];
+  const firstTopic = subject.units.flatMap((unit) => unit.topics)[0];
+  if (firstTopic) suggestions.push(`Explícame «${firstTopic.title.slice(0, 60)}»`);
+  if (subject.events.length > 0 && materials.some((material) => material.is_syllabus)) {
+    suggestions.push("¿Qué entra en el próximo examen?");
+  }
+  suggestions.push("Resume los puntos clave de la materia");
+  return suggestions;
 }

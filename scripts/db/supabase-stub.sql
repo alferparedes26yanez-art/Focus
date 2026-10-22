@@ -17,6 +17,8 @@ create function auth.uid() returns uuid
 language sql stable
 as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 
+create schema extensions;
+
 create schema storage;
 create table storage.buckets (
   id text primary key,
@@ -41,7 +43,7 @@ as $$
 $$;
 
 -- Same default grants Supabase applies to the API roles.
-grant usage on schema public, auth, storage to anon, authenticated, service_role;
+grant usage on schema public, auth, storage, extensions to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
 grant all on all tables in schema storage to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;

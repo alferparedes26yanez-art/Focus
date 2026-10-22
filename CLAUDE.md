@@ -51,14 +51,19 @@ La especificación completa está en `SPEC.md`. Léela antes de empezar o planif
 - `npm run db:test` (migraciones + pruebas RLS en un Postgres local) · `npm run db:types` (regenera `src/types/database.ts`)
 
 ## Estado actual
-- Fase actual: 1 (base y sílabo) terminada en código; falta la prueba de punta a punta con Supabase y Gemini reales.
+- Fase actual: 2 (material y chat con citas) terminada en código. Fase 1 funciona en producción. Para la Fase 2 falta aplicar las migraciones 0700 y 0800 en Supabase, cargar `AI_MODEL_FAST` y `AI_MODEL_EMBEDDING` en Vercel y probar el criterio de aceptación con un PDF real.
 - Notas:
   - Next.js 16 con Cache Components: todo lo que lee sesión, `params` o `searchParams` va dentro de `<Suspense>`. `AGENTS.md` apunta a la documentación de Next incluida en `node_modules/next/dist/docs/`: léela antes de usar una API de Next.
   - Las evaluaciones se vinculan a unidades (`event_units`), no a temas: un tema nuevo en una unidad entra solo en sus exámenes.
   - El registro está cerrado por defecto: `signup_allowlist` (correo, `@dominio` o `*`) se aplica también en la base de datos.
   - El presupuesto de IA es global (una sola clave de Gemini). Para lanzarlo en la universidad hará falta un límite por usuario.
   - Para cargar otro sílabo hay que vaciar la materia (botón "Vaciar"), no se reemplaza automáticamente.
-  - El PDF y las fotos del sílabo van directo a Gemini (lee tablas y escaneos); Word se convierte a HTML con `mammoth`. El parser de PDF por página llega en la fase 2.
+  - El PDF y las fotos del sílabo van directo a Gemini (lee tablas y escaneos); Word se convierte a HTML con `mammoth`.
+  - El material se lee por lotes que pide el navegador mientras la materia está abierta (`/api/materials/[id]/process`, un lote por request de 60 s; `locked_until` evita trabajo doble y `save_material_batch` guarda fragmentos y avance juntos). Si se cierra la página, sigue al volver.
+  - Lectura: PDF por página con `unpdf` (páginas con menos de 80 caracteres se transcriben con Flash-Lite), PPTX por diapositiva (JSZip), Word por secciones, web con Readability y protección SSRF, YouTube en partes de 5 min con `videoMetadata` (máx. 1 h, costo estimado antes de aceptar).
+  - Búsqueda exacta por materia con `match_chunks` (embeddings de 768 dimensiones, sin índice aproximado para no perder resultados).
+  - El sílabo guardado entra solo a la biblioteca (trigger; `is_syllabus`, sus archivos siguen en el bucket `syllabi`). "Vaciar materia" lo quita y deja el resto del material "sin ordenar".
+  - Chat: solo se guardan las citas `[n]` que estaban entre las fuentes dadas al modelo; el párrafo "**Conocimiento general:**" marca lo que no viene del material.
   - Precios de modelos en `src/lib/ai/pricing.ts`: verificarlos contra la página oficial al cambiar de modelo.
-  - Modelos: los 2.5 ya no están disponibles para proyectos nuevos de Google (oct. 2026). Por defecto `gemini-3.8-flash` (main) y `gemini-3.5-flash-lite` (fast).
+  - Modelos: los 2.5 ya no están disponibles para proyectos nuevos de Google (oct. 2026). Por defecto `gemini-3.8-flash` (main), `gemini-3.5-flash-lite` (fast) y `gemini-embedding-001` (embedding).
   - Producción: Vercel (proyecto `focuss`, https://focuss-alpha.vercel.app) publica `main` automáticamente.

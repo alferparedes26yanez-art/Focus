@@ -3,7 +3,9 @@ import "server-only";
 import {
   GoogleGenAI,
   ThinkingLevel,
+  type Content,
   type GenerateContentResponse,
+  type MediaResolution,
   type Part,
   type ThinkingConfig,
 } from "@google/genai";
@@ -26,9 +28,13 @@ import { recordUsage } from "./usage";
 
 export type { ModelTier };
 
+/** Size of every embedding stored in chunks.embedding (vector(768)). */
+export const EMBEDDING_DIMENSIONS = 768;
+
 const MAX_CONCURRENT_CALLS = 2;
 const MAX_CALL_MS = 45_000;
 const MIN_CALL_MS = 8_000;
+const EMBED_BATCH_SIZE = 50;
 
 const limiter = new ConcurrencyLimiter(MAX_CONCURRENT_CALLS);
 let genai: GoogleGenAI | null = null;
@@ -49,8 +55,10 @@ export function getModel(tier: ModelTier): string {
   }
   const model = {
     main: env.AI_MODEL_MAIN,
-    fast: env.AI_MODEL_FAST,
+    // Simple tasks fall back to the main model if no Flash-Lite is set.
+    fast: env.AI_MODEL_FAST ?? env.AI_MODEL_MAIN,
     deep: env.AI_MODEL_DEEP,
+    embedding: env.AI_MODEL_EMBEDDING,
   }[tier];
   if (!model) {
     throw notConfiguredError(`falta la variable ${MODEL_ENV_NAMES[tier]}.`);
@@ -71,19 +79,15 @@ function getThinkingConfig(model: string, effort: "low" | "default"): ThinkingCo
 }
 
 // When a model is not found, ask the API which models this key can use so the
-// error message can name valid ones. Text models first, Flash before others.
-async function listAvailableModels(): Promise<string[]> {
+// error message can name valid ones. Flash models first.
+async function listAvailableModels(action: "generateContent" | "embedContent"): Promise<string[]> {
   try {
     const pager = await getGenAI().models.list({ config: { pageSize: 100, queryBase: true } });
     const names: string[] = [];
     for await (const model of pager) {
       const id = model.name?.replace(/^models\//, "");
-      if (
-        id &&
-        id.startsWith("gemini-") &&
-        (model.supportedActions ?? []).includes("generateContent") &&
-        !/tts|image|audio|live|embedding|robotics|computer/.test(id)
-      ) {
+      const isText = action === "embedContent" || !/tts|image|audio|live|embedding|robotics|computer/.test(id ?? "");
+      if (id && id.startsWith("gemini-") && (model.supportedActions ?? []).includes(action) && isText) {
         names.push(id);
       }
     }
@@ -98,7 +102,9 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function readUsage(response: GenerateContentResponse) {
+type Usage = { inputTokens: number; outputTokens: number };
+
+function readUsage(response: GenerateContentResponse): Usage {
   const usage = response.usageMetadata;
   return {
     inputTokens: (usage?.promptTokenCount ?? 0) + (usage?.toolUsePromptTokenCount ?? 0),
@@ -114,10 +120,22 @@ type CallContext = {
   deadline: number;
 };
 
-async function callWithRetry(
+async function ensureBudget() {
+  try {
+    await assertWithinBudget();
+  } catch (error) {
+    if (error instanceof AiError) throw error;
+    throw requestFailedError(error);
+  }
+}
+
+// Runs one API request with retries. `usageOf` returns what to record when it
+// succeeds, or null when the caller records it later (streams).
+async function callWithRetry<T>(
   context: CallContext,
-  request: (timeoutMs: number) => Promise<GenerateContentResponse>,
-): Promise<GenerateContentResponse> {
+  request: (timeoutMs: number) => Promise<T>,
+  usageOf: (response: T) => Usage | null,
+): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     const timeoutMs = Math.min(MAX_CALL_MS, context.deadline - Date.now());
     if (timeoutMs < MIN_CALL_MS) {
@@ -127,14 +145,17 @@ async function callWithRetry(
     const startedAt = Date.now();
     try {
       const response = await request(timeoutMs);
-      await recordUsage({
-        userId: context.userId,
-        feature: context.feature,
-        model: context.model,
-        ...readUsage(response),
-        status: "success",
-        durationMs: Date.now() - startedAt,
-      });
+      const usage = usageOf(response);
+      if (usage) {
+        await recordUsage({
+          userId: context.userId,
+          feature: context.feature,
+          model: context.model,
+          ...usage,
+          status: "success",
+          durationMs: Date.now() - startedAt,
+        });
+      }
       return response;
     } catch (error) {
       const status = getErrorStatus(error);
@@ -163,7 +184,10 @@ async function callWithRetry(
       const message = error instanceof Error ? error.message : "";
       const setupProblem = describeGeminiSetupError(status, message, context.model, context.tier);
       if (setupProblem) {
-        const available = status === 404 ? await listAvailableModels() : [];
+        const available =
+          status === 404
+            ? await listAvailableModels(context.tier === "embedding" ? "embedContent" : "generateContent")
+            : [];
         if (available.length > 0) console.warn("[ai] models available for this key:", available.join(", "));
         throw notConfiguredError(
           available.length > 0 ? `${setupProblem} Modelos disponibles: ${available.join(", ")}.` : setupProblem,
@@ -197,6 +221,8 @@ export type GenerateJsonOptions<T extends z.ZodType> = {
   parts: Part[];
   thinking?: "low" | "default";
   maxOutputTokens?: number;
+  /** Lower image/video resolution to save tokens (transcripts). */
+  mediaResolution?: MediaResolution;
   /** Epoch ms by which the whole operation must finish (serverless timeout). */
   deadline: number;
 };
@@ -207,12 +233,7 @@ export async function generateJson<T extends z.ZodType>(
   options: GenerateJsonOptions<T>,
 ): Promise<z.infer<T>> {
   const model = getModel(options.tier);
-  try {
-    await assertWithinBudget();
-  } catch (error) {
-    if (error instanceof AiError) throw error;
-    throw requestFailedError(error);
-  }
+  await ensureBudget();
 
   const context: CallContext = {
     feature: options.feature,
@@ -240,20 +261,24 @@ export async function generateJson<T extends z.ZodType>(
     let response: GenerateContentResponse;
     try {
       response = await limiter.run(() =>
-        callWithRetry(context, (timeoutMs) =>
-          getGenAI().models.generateContent({
-            model,
-            contents: [{ role: "user", parts }],
-            config: {
-              systemInstruction: options.systemInstruction,
-              responseMimeType: "application/json",
-              responseJsonSchema: schemaInPrompt ? undefined : responseJsonSchema,
-              maxOutputTokens,
-              temperature: 0.2,
-              thinkingConfig: getThinkingConfig(model, options.thinking ?? "low"),
-              httpOptions: { timeout: timeoutMs },
-            },
-          }),
+        callWithRetry(
+          context,
+          (timeoutMs) =>
+            getGenAI().models.generateContent({
+              model,
+              contents: [{ role: "user", parts }],
+              config: {
+                systemInstruction: options.systemInstruction,
+                responseMimeType: "application/json",
+                responseJsonSchema: schemaInPrompt ? undefined : responseJsonSchema,
+                maxOutputTokens,
+                temperature: 0.2,
+                thinkingConfig: getThinkingConfig(model, options.thinking ?? "low"),
+                mediaResolution: options.mediaResolution,
+                httpOptions: { timeout: timeoutMs },
+              },
+            }),
+          readUsage,
         ),
       );
     } catch (error) {
@@ -297,4 +322,121 @@ export async function generateJson<T extends z.ZodType>(
   }
 
   throw invalidOutputError(new Error(repairNote ?? "Invalid output"));
+}
+
+// Embeddings for the search index ("document") or for a question ("query").
+export async function embedTexts(options: {
+  feature: AiFeature;
+  userId: string;
+  texts: string[];
+  purpose: "document" | "query";
+  deadline: number;
+}): Promise<number[][]> {
+  if (options.texts.length === 0) return [];
+  const model = getModel("embedding");
+  await ensureBudget();
+
+  const context: CallContext = {
+    feature: options.feature,
+    userId: options.userId,
+    tier: "embedding",
+    model,
+    deadline: options.deadline,
+  };
+
+  const vectors: number[][] = [];
+  for (let start = 0; start < options.texts.length; start += EMBED_BATCH_SIZE) {
+    const batch = options.texts.slice(start, start + EMBED_BATCH_SIZE);
+    // The embeddings API does not report tokens; ~4 characters per token.
+    const estimatedTokens = Math.ceil(batch.reduce((sum, text) => sum + text.length, 0) / 4);
+    const response = await limiter.run(() =>
+      callWithRetry(
+        context,
+        (timeoutMs) =>
+          getGenAI().models.embedContent({
+            model,
+            contents: batch,
+            config: {
+              taskType: options.purpose === "query" ? "RETRIEVAL_QUERY" : "RETRIEVAL_DOCUMENT",
+              outputDimensionality: EMBEDDING_DIMENSIONS,
+              httpOptions: { timeout: timeoutMs },
+            },
+          }),
+        () => ({ inputTokens: estimatedTokens, outputTokens: 0 }),
+      ),
+    );
+    const values = (response.embeddings ?? []).map((embedding) => embedding.values ?? []);
+    if (values.length !== batch.length || values.some((vector) => vector.length !== EMBEDDING_DIMENSIONS)) {
+      throw invalidOutputError(new Error("Unexpected embedding size"));
+    }
+    vectors.push(...values);
+  }
+  return vectors;
+}
+
+// Streams a text answer (chat). Retries only while opening the stream; usage
+// is recorded when the stream ends.
+export async function streamText(options: {
+  feature: AiFeature;
+  tier: ModelTier;
+  userId: string;
+  systemInstruction: string;
+  contents: Content[];
+  maxOutputTokens?: number;
+  deadline: number;
+}): Promise<AsyncGenerator<string>> {
+  const model = getModel(options.tier);
+  await ensureBudget();
+
+  const context: CallContext = {
+    feature: options.feature,
+    userId: options.userId,
+    tier: options.tier,
+    model,
+    deadline: options.deadline,
+  };
+  const startedAt = Date.now();
+  const stream = await limiter.run(() =>
+    callWithRetry(
+      context,
+      (timeoutMs) =>
+        getGenAI().models.generateContentStream({
+          model,
+          contents: options.contents,
+          config: {
+            systemInstruction: options.systemInstruction,
+            maxOutputTokens: options.maxOutputTokens ?? 4_096,
+            temperature: 0.3,
+            thinkingConfig: getThinkingConfig(model, "low"),
+            httpOptions: { timeout: timeoutMs },
+          },
+        }),
+      () => null,
+    ),
+  );
+
+  return (async function* () {
+    let last: GenerateContentResponse | undefined;
+    let failed = false;
+    try {
+      for await (const chunk of stream) {
+        last = chunk;
+        const text = chunk.text;
+        if (text) yield text;
+      }
+    } catch (error) {
+      failed = true;
+      console.error(`[ai] ${options.feature} stream failed:`, error);
+      throw requestFailedError(error);
+    } finally {
+      await recordUsage({
+        userId: options.userId,
+        feature: options.feature,
+        model,
+        ...(last ? readUsage(last) : { inputTokens: 0, outputTokens: 0 }),
+        status: failed ? "error" : "success",
+        durationMs: Date.now() - startedAt,
+      });
+    }
+  })();
 }

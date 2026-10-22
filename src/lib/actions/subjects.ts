@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth";
+import { removeMaterialFiles } from "@/lib/materials/storage";
 import { removeSyllabusFiles } from "@/lib/syllabus/storage";
 import { subjectInputSchema, type SubjectInput } from "@/lib/validation";
 
@@ -53,8 +54,12 @@ export async function deleteSubject(subjectId: string): Promise<ActionResult> {
     return { ok: false, error: "Materia no válida." };
   }
 
-  if (!(await removeSyllabusFiles(supabase, { subjectId }))) {
-    return { ok: false, error: "No se pudieron borrar los archivos del sílabo. Inténtalo de nuevo." };
+  const removed = await Promise.all([
+    removeSyllabusFiles(supabase, { subjectId }),
+    removeMaterialFiles(supabase, { subjectId }),
+  ]);
+  if (removed.includes(false)) {
+    return { ok: false, error: "No se pudieron borrar los archivos de la materia. Inténtalo de nuevo." };
   }
 
   const { error } = await supabase.from("subjects").delete().eq("id", subjectId);

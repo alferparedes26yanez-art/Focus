@@ -319,6 +319,131 @@ select pg_temp.expect_error(
 reset role;
 
 -- ---------------------------------------------------------------------------
+\echo '== Phase 2: material library and chat'
+-- ---------------------------------------------------------------------------
+select set_config('request.jwt.claim.sub', :'user_a', false);
+set role authenticated;
+
+select pg_temp.expect(
+  (select count(*) from public.materials
+   where subject_id = 'aaaaaaaa-0000-0000-0000-000000000001' and is_syllabus and status = 'queued'
+     and topic_source = 'general' and storage_bucket = 'syllabi') = 1,
+  'saving a syllabus adds it to the library');
+
+insert into public.materials (id, subject_id, topic_id, topic_source, kind, title, status)
+values (
+  'aaaaaaaa-0000-0000-0000-0000000000e1',
+  'aaaaaaaa-0000-0000-0000-000000000001',
+  (select t.id from public.topics t join public.units u on u.id = t.unit_id
+   where u.subject_id = 'aaaaaaaa-0000-0000-0000-000000000001' order by u.position, t.position limit 1),
+  'user', 'pdf', 'Diapositivas U1', 'ready');
+
+insert into public.subjects (id, name) values ('aaaaaaaa-0000-0000-0000-000000000002', 'Otra materia');
+insert into public.units (id, subject_id, title) values
+  ('aaaaaaaa-0000-0000-0000-0000000000f1', 'aaaaaaaa-0000-0000-0000-000000000002', 'Unidad X');
+insert into public.topics (id, unit_id, title) values
+  ('aaaaaaaa-0000-0000-0000-0000000000f2', 'aaaaaaaa-0000-0000-0000-0000000000f1', 'Tema X');
+
+select pg_temp.expect_error(
+  $$update public.materials set topic_id = 'aaaaaaaa-0000-0000-0000-0000000000f2'
+    where id = 'aaaaaaaa-0000-0000-0000-0000000000e1'$$,
+  'a material cannot be filed under a topic of another subject', '%topic_not_in_subject%');
+
+insert into public.chunks (material_id, subject_id, position, page, content, embedding) values
+  ('aaaaaaaa-0000-0000-0000-0000000000e1', 'aaaaaaaa-0000-0000-0000-000000000001', 0, 3, 'Límite lateral',
+   (array[1::real] || array_fill(0::real, array[767]))::extensions.vector),
+  ('aaaaaaaa-0000-0000-0000-0000000000e1', 'aaaaaaaa-0000-0000-0000-000000000001', 1, 7, 'Regla de la cadena',
+   (array[0::real, 1::real] || array_fill(0::real, array[766]))::extensions.vector);
+
+select pg_temp.expect(
+  (select page from public.match_chunks(
+     'aaaaaaaa-0000-0000-0000-000000000001',
+     (array[0.1::real, 0.9::real] || array_fill(0::real, array[766]))::extensions.vector, 5)
+   limit 1) = 7,
+  'match_chunks returns the most similar fragment first, with its page');
+
+insert into public.materials (id, subject_id, topic_source, kind, title, status)
+values ('aaaaaaaa-0000-0000-0000-0000000000e3', 'aaaaaaaa-0000-0000-0000-000000000001', 'general', 'pdf',
+        'Libro', 'processing');
+select public.save_material_batch(
+  'aaaaaaaa-0000-0000-0000-0000000000e3', 0, 2, 4,
+  jsonb_build_array(
+    jsonb_build_object('content', 'Página uno', 'page', 1,
+                       'embedding', array_fill(0.1::real, array[768])::extensions.vector::text),
+    jsonb_build_object('content', 'Página dos', 'page', 2, 'section', null,
+                       'embedding', array_fill(0.2::real, array[768])::extensions.vector::text)),
+  false);
+select pg_temp.expect(
+  (select processed_units = 2 and total_units = 4 and status = 'processing'
+   from public.materials where id = 'aaaaaaaa-0000-0000-0000-0000000000e3')
+  and (select array_agg(page order by position) = array[1, 2]
+       from public.chunks where material_id = 'aaaaaaaa-0000-0000-0000-0000000000e3'),
+  'save_material_batch stores the chunks and the progress');
+select pg_temp.expect_error(
+  $$select public.save_material_batch('aaaaaaaa-0000-0000-0000-0000000000e3', 0, 2, 4, '[]', false)$$,
+  'a batch is never saved twice', '%batch_conflict%');
+select public.save_material_batch(
+  'aaaaaaaa-0000-0000-0000-0000000000e3', 2, 4, 4,
+  jsonb_build_array(jsonb_build_object('content', 'Página tres', 'page', 3,
+                    'embedding', array_fill(0.3::real, array[768])::extensions.vector::text)),
+  true);
+select pg_temp.expect(
+  (select status = 'ready' from public.materials where id = 'aaaaaaaa-0000-0000-0000-0000000000e3')
+  and (select max(position) = 2 from public.chunks where material_id = 'aaaaaaaa-0000-0000-0000-0000000000e3'),
+  'the last batch marks the material as ready and positions continue');
+
+insert into public.chat_threads (id, subject_id, title)
+values ('aaaaaaaa-0000-0000-0000-0000000000a9', 'aaaaaaaa-0000-0000-0000-000000000001', 'Dudas');
+insert into public.messages (thread_id, role, content)
+values ('aaaaaaaa-0000-0000-0000-0000000000a9', 'user', '¿Qué es un límite?');
+
+insert into storage.objects (bucket_id, name)
+values ('materials', :'user_a' || '/aaaaaaaa-0000-0000-0000-000000000001/m/diapositivas.pdf');
+reset role;
+
+select set_config('request.jwt.claim.sub', :'user_b', false);
+set role authenticated;
+select pg_temp.expect((select count(*) from public.materials) = 0, 'B sees no materials of A');
+select pg_temp.expect((select count(*) from public.chunks) = 0, 'B sees no chunks of A');
+select pg_temp.expect((select count(*) from public.chat_threads) = 0, 'B sees no chats of A');
+select pg_temp.expect((select count(*) from public.messages) = 0, 'B sees no messages of A');
+select pg_temp.expect(
+  (select count(*) from public.match_chunks(
+     'aaaaaaaa-0000-0000-0000-000000000001', array_fill(0.5::real, array[768])::extensions.vector, 5)) = 0,
+  'B cannot search A''s material');
+select pg_temp.expect_error(
+  $$insert into public.chunks (material_id, subject_id, position, content, embedding)
+    values ('aaaaaaaa-0000-0000-0000-0000000000e1', 'aaaaaaaa-0000-0000-0000-000000000001', 9, 'x',
+            array_fill(0::real, array[768])::extensions.vector)$$,
+  'B adds chunks to A''s material');
+select pg_temp.expect_error(
+  $$insert into public.messages (thread_id, role, content)
+    values ('aaaaaaaa-0000-0000-0000-0000000000a9', 'user', 'hola')$$,
+  'B writes into A''s chat');
+select pg_temp.expect_error(
+  $$select public.save_material_batch('aaaaaaaa-0000-0000-0000-0000000000e3', 4, 5, 5, '[]', true)$$,
+  'B cannot save batches into A''s material', '%batch_conflict%');
+select pg_temp.expect_error(
+  format($$insert into storage.objects (bucket_id, name) values ('materials', '%s/s/m/f.pdf')$$, :'user_a'),
+  'B uploads into A''s material folder');
+reset role;
+
+select set_config('request.jwt.claim.sub', :'user_a', false);
+set role authenticated;
+select public.clear_subject('aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.expect(
+  (select count(*) from public.materials where subject_id = 'aaaaaaaa-0000-0000-0000-000000000001' and is_syllabus) = 0,
+  'clear_subject removes the syllabus from the library');
+select pg_temp.expect(
+  (select topic_id is null and topic_source = 'pending' and status = 'ready'
+   from public.materials where id = 'aaaaaaaa-0000-0000-0000-0000000000e1'),
+  'clear_subject keeps the rest of the material, waiting to be classified again');
+select pg_temp.expect(
+  (select count(*) from public.chunks where material_id = 'aaaaaaaa-0000-0000-0000-0000000000e1') = 2,
+  'its search index is kept');
+reset role;
+
+-- ---------------------------------------------------------------------------
 \echo '== Deleting a user'
 -- ---------------------------------------------------------------------------
 delete from auth.users where id = :'user_a';

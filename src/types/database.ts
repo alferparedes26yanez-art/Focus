@@ -46,6 +46,93 @@ export type Database = {
         };
         Relationships: [];
       };
+      chat_threads: {
+        Row: {
+          created_at: string;
+          id: string;
+          subject_id: string;
+          title: string;
+          updated_at: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: string;
+          subject_id: string;
+          title: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          subject_id?: string;
+          title?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_threads_subject_id_user_id_fkey";
+            columns: ["subject_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "subjects";
+            referencedColumns: ["id", "user_id"];
+          },
+        ];
+      };
+      chunks: {
+        Row: {
+          content: string;
+          created_at: string;
+          embedding: string;
+          id: string;
+          material_id: string;
+          page: number | null;
+          position: number;
+          section: string | null;
+          start_seconds: number | null;
+          subject_id: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          content: string;
+          created_at?: string;
+          embedding: string;
+          id?: string;
+          material_id: string;
+          page?: number | null;
+          position: number;
+          section?: string | null;
+          start_seconds?: number | null;
+          subject_id: string;
+          user_id?: string;
+        };
+        Update: {
+          content?: string;
+          created_at?: string;
+          embedding?: string;
+          id?: string;
+          material_id?: string;
+          page?: number | null;
+          position?: number;
+          section?: string | null;
+          start_seconds?: number | null;
+          subject_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chunks_material_id_subject_id_user_id_fkey";
+            columns: ["material_id", "subject_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "materials";
+            referencedColumns: ["id", "subject_id", "user_id"];
+          },
+        ];
+      };
       event_units: {
         Row: {
           event_id: string;
@@ -127,6 +214,133 @@ export type Database = {
             columns: ["subject_id", "user_id"];
             isOneToOne: false;
             referencedRelation: "subjects";
+            referencedColumns: ["id", "user_id"];
+          },
+        ];
+      };
+      materials: {
+        Row: {
+          created_at: string;
+          duration_seconds: number | null;
+          error: string | null;
+          files: NonNullable<Json>;
+          id: string;
+          is_syllabus: boolean;
+          kind: string;
+          locked_until: string | null;
+          processed_units: number;
+          source_url: string | null;
+          status: string;
+          storage_bucket: string;
+          subject_id: string;
+          title: string;
+          topic_id: string | null;
+          topic_source: string;
+          total_units: number | null;
+          updated_at: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          error?: string | null;
+          files?: NonNullable<Json>;
+          id?: string;
+          is_syllabus?: boolean;
+          kind: string;
+          locked_until?: string | null;
+          processed_units?: number;
+          source_url?: string | null;
+          status?: string;
+          storage_bucket?: string;
+          subject_id: string;
+          title: string;
+          topic_id?: string | null;
+          topic_source?: string;
+          total_units?: number | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          error?: string | null;
+          files?: NonNullable<Json>;
+          id?: string;
+          is_syllabus?: boolean;
+          kind?: string;
+          locked_until?: string | null;
+          processed_units?: number;
+          source_url?: string | null;
+          status?: string;
+          storage_bucket?: string;
+          subject_id?: string;
+          title?: string;
+          topic_id?: string | null;
+          topic_source?: string;
+          total_units?: number | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "materials_subject_id_user_id_fkey";
+            columns: ["subject_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "subjects";
+            referencedColumns: ["id", "user_id"];
+          },
+          {
+            foreignKeyName: "materials_topic_id_user_id_fkey";
+            columns: ["topic_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "topics";
+            referencedColumns: ["id", "user_id"];
+          },
+        ];
+      };
+      messages: {
+        Row: {
+          citations: NonNullable<Json>;
+          content: string;
+          created_at: string;
+          id: string;
+          mode: string | null;
+          role: string;
+          thread_id: string;
+          used_general_knowledge: boolean;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          citations?: NonNullable<Json>;
+          content: string;
+          created_at?: string;
+          id?: string;
+          mode?: string | null;
+          role: string;
+          thread_id: string;
+          used_general_knowledge?: boolean;
+          user_id?: string;
+        };
+        Update: {
+          citations?: NonNullable<Json>;
+          content?: string;
+          created_at?: string;
+          id?: string;
+          mode?: string | null;
+          role?: string;
+          thread_id?: string;
+          used_general_knowledge?: boolean;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "messages_thread_id_user_id_fkey";
+            columns: ["thread_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "chat_threads";
             referencedColumns: ["id", "user_id"];
           },
         ];
@@ -359,6 +573,21 @@ export type Database = {
       apply_syllabus_import: { Args: { p_import_id: string; p_payload: Json }; Returns: Json };
       clear_subject: { Args: { p_subject_id: string }; Returns: undefined };
       is_signup_allowed: { Args: { p_email: string }; Returns: boolean };
+      match_chunks: {
+        Args: { p_match_count?: number; p_query_embedding: string; p_subject_id: string };
+        Returns: {
+          chunk_id: string;
+          content: string;
+          material_id: string;
+          material_kind: string;
+          material_title: string;
+          page: number;
+          section: string;
+          similarity: number;
+          source_url: string;
+          start_seconds: number;
+        }[];
+      };
       my_ai_usage_summary: {
         Args: { p_since: string };
         Returns: {
@@ -372,6 +601,17 @@ export type Database = {
       };
       reorder_topics: { Args: { p_topic_ids: string[]; p_unit_id: string }; Returns: undefined };
       reorder_units: { Args: { p_subject_id: string; p_unit_ids: string[] }; Returns: undefined };
+      save_material_batch: {
+        Args: {
+          p_chunks: Json;
+          p_done: boolean;
+          p_from_units: number;
+          p_material_id: string;
+          p_to_units: number;
+          p_total_units: number;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;

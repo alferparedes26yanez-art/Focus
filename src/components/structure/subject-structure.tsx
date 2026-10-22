@@ -15,12 +15,20 @@ import {
 } from "@/lib/actions/structure";
 
 import { structureReducer, TEMP_ID_PREFIX, topicIdsAfterMove, type StructureAction, type TreeUnit } from "./structure-state";
-import { StructureTree, type StructureHandlers } from "./structure-tree";
+import { StructureTree, TopicMaterialCounts, type StructureHandlers } from "./structure-tree";
 
 // Subject page editor: applies each change instantly (optimistic) and saves it
 // with a Server Action. If saving fails the change is rolled back and a toast
 // explains why.
-export function SubjectStructure({ subjectId, units }: { subjectId: string; units: TreeUnit[] }) {
+export function SubjectStructure({
+  subjectId,
+  units,
+  materialCounts = {},
+}: {
+  subjectId: string;
+  units: TreeUnit[];
+  materialCounts?: Record<string, number>;
+}) {
   const [optimisticUnits, applyOptimistic] = useOptimistic(units, structureReducer);
   const [, startTransition] = useTransition();
 
@@ -57,5 +65,9 @@ export function SubjectStructure({ subjectId, units }: { subjectId: string; unit
     },
   };
 
-  return <StructureTree units={optimisticUnits} handlers={handlers} />;
+  return (
+    <TopicMaterialCounts value={materialCounts}>
+      <StructureTree units={optimisticUnits} handlers={handlers} />
+    </TopicMaterialCounts>
+  );
 }
