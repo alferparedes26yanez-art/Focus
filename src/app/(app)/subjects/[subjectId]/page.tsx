@@ -14,9 +14,10 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { SetupNotice } from "@/components/shared/setup-notice";
 import { SubjectStructure } from "@/components/structure/subject-structure";
 import { SubjectHeader } from "@/components/subjects/subject-header";
-import { SUBJECT_TABS, SubjectTabs } from "@/components/subjects/subject-tabs";
+import { SubjectTabs } from "@/components/subjects/subject-tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { parseSubjectTab } from "@/lib/constants/subject-tabs";
 import { getChatThreads } from "@/lib/data/chat";
 import { MissingTableError } from "@/lib/data/errors";
 import { getSubjectMaterials } from "@/lib/data/materials";
@@ -53,7 +54,7 @@ async function SubjectContent({ params, searchParams }: PageProps<"/subjects/[su
   const pendingIds = materials
     .filter((material) => material.status === "queued" || material.status === "processing")
     .map((material) => material.id);
-  const tab = SUBJECT_TABS.find((value) => value === query.tab) ?? "temas";
+  const tab = parseSubjectTab(query.tab);
 
   const syllabusUrl = `/subjects/${subject.id}/syllabus`;
   const reviewReady = subject.pendingImport?.status === "review";

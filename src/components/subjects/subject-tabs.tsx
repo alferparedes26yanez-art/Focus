@@ -3,9 +3,8 @@
 import { CalendarDays, Library, ListTree, MessageCircle } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { SubjectTab } from "@/lib/constants/subject-tabs";
 
-export const SUBJECT_TABS = ["temas", "material", "chat", "evaluaciones"] as const;
-export type SubjectTab = (typeof SUBJECT_TABS)[number];
 
 function Count({ value }: { value: number }) {
   if (value <= 0) return null;

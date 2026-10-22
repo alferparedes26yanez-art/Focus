@@ -352,16 +352,23 @@ export async function processMaterialBatch(input: {
 }): Promise<ProcessOutcome> {
   const { supabase, userId, materialId, deadline } = input;
 
-  // Claim the material so two tabs never process (and pay for) the same batch.
+  // Claim the material so two tabs never process (and pay for) the same batch:
+  // first if it is free, then if its lock expired. Two plain filters instead of
+  // one or(...), which PostgREST also applies to the updated row it returns
+  // (where the new lock no longer matches).
   const now = new Date();
-  const { data: claimed, error: claimError } = await supabase
-    .from("materials")
-    .update({ status: "processing", locked_until: new Date(now.getTime() + LOCK_MS).toISOString() })
-    .eq("id", materialId)
-    .in("status", ["queued", "processing"])
-    .or(`locked_until.is.null,locked_until.lt."${now.toISOString()}"`)
-    .select(MATERIAL_COLUMNS)
-    .maybeSingle();
+  const claim = (lock: "free" | "expired") => {
+    const query = supabase
+      .from("materials")
+      .update({ status: "processing", locked_until: new Date(now.getTime() + LOCK_MS).toISOString() })
+      .eq("id", materialId)
+      .in("status", ["queued", "processing"]);
+    return (lock === "free" ? query.is("locked_until", null) : query.lt("locked_until", now.toISOString()))
+      .select(MATERIAL_COLUMNS)
+      .maybeSingle();
+  };
+  let { data: claimed, error: claimError } = await claim("free");
+  if (!claimError && !claimed) ({ data: claimed, error: claimError } = await claim("expired"));
 
   if (claimError) {
     console.error("[materials] claim failed:", claimError.message);

@@ -63,7 +63,14 @@ function fakeSupabase(material: Material, files: Record<string, Buffer>, topics:
         state.filters.push([column, value]);
         return chain;
       },
-      or: () => chain,
+      is: (column: string, value: unknown) => {
+        state.filters.push([column, value]);
+        return chain;
+      },
+      lt: (column: string, value: unknown) => {
+        state.filters.push([column, value]);
+        return chain;
+      },
       maybeSingle: async () => run(),
       then: (resolve: (value: unknown) => unknown, reject: (error: unknown) => unknown) =>
         Promise.resolve(run()).then(resolve, reject),

@@ -27,15 +27,25 @@ export async function runSyllabusExtraction(input: {
 }): Promise<ExtractionResult> {
   const { supabase, userId, importId, deadline } = input;
 
-  // Claim the import atomically so a double click cannot pay for two runs.
+  // Claim the import atomically so a double click cannot pay for two runs:
+  // first if it is waiting, then if a previous run died. Two plain filters
+  // instead of one or(...), which PostgREST also applies to the updated row.
   const staleBefore = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
-  const { data: claimed, error: claimError } = await supabase
-    .from("syllabus_imports")
-    .update({ status: "processing", error: null })
-    .eq("id", importId)
-    .or(`status.in.(pending,failed),and(status.eq.processing,updated_at.lt."${staleBefore}")`)
-    .select("id, files")
-    .maybeSingle();
+  const claim = (from: "waiting" | "stale") => {
+    const query = supabase
+      .from("syllabus_imports")
+      .update({ status: "processing", error: null })
+      .eq("id", importId);
+    return (
+      from === "waiting"
+        ? query.in("status", ["pending", "failed"])
+        : query.eq("status", "processing").lt("updated_at", staleBefore)
+    )
+      .select("id, files")
+      .maybeSingle();
+  };
+  let { data: claimed, error: claimError } = await claim("waiting");
+  if (!claimError && !claimed) ({ data: claimed, error: claimError } = await claim("stale"));
 
   if (claimError) {
     return { ok: false, status: 500, error: "No se pudo iniciar la lectura del sílabo." };
