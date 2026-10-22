@@ -95,11 +95,12 @@ export async function runSyllabusExtraction(input: {
       deadline,
     });
 
-    const { isSyllabus, draft } = normalizeSyllabusOutput(output, { today });
+    const { isSyllabus, notSyllabusReason, draft } = normalizeSyllabusOutput(output, { today });
     if (!isSyllabus) {
+      const reason = notSyllabusReason ? ` ${notSyllabusReason.replace(/\.?$/, ".")}` : "";
       return fail(
         422,
-        "El archivo no parece un sílabo. Revisa que sea el programa de la materia e inténtalo de nuevo.",
+        `El archivo no parece un sílabo.${reason} Sube el programa de la materia (con sus unidades, temas o fechas). Si es material de clase, agrégalo en la pestaña Material.`,
       );
     }
 

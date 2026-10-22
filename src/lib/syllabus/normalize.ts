@@ -19,7 +19,7 @@ function daysBetween(fromIso: string, toIso: string): number {
 export function normalizeSyllabusOutput(
   output: SyllabusAiOutput,
   options: { today: string },
-): { isSyllabus: boolean; draft: SyllabusDraft } {
+): { isSyllabus: boolean; notSyllabusReason: string | null; draft: SyllabusDraft } {
   const warnings: string[] = [];
 
   const units = output.units
@@ -109,6 +109,13 @@ export function normalizeSyllabusOutput(
     warnings.push("No encontramos unidades ni temas: puedes agregarlos a mano.");
   }
 
+  // If the AI doubted but still found the course contents, let the student
+  // decide in the review screen.
+  const isSyllabus = output.is_syllabus || units.length > 0;
+  if (!output.is_syllabus && isSyllabus) {
+    warnings.push("La IA no está segura de que sea el sílabo de la materia: revisa que las unidades y fechas sean correctas.");
+  }
+
   const email = clean(output.teacher.email, 200);
   const bibliography = output.bibliography
     .map((item) => {
@@ -127,7 +134,8 @@ export function normalizeSyllabusOutput(
     .filter((warning): warning is string => warning !== null);
 
   return {
-    isSyllabus: output.is_syllabus,
+    isSyllabus,
+    notSyllabusReason: isSyllabus ? null : clean(output.not_syllabus_reason, 300),
     draft: {
       course_term: clean(output.course_term, 200),
       teacher: {

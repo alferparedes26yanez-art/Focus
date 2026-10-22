@@ -64,6 +64,8 @@ La especificación completa está en `SPEC.md`. Léela antes de empezar o planif
   - Búsqueda exacta por materia con `match_chunks` (embeddings de 768 dimensiones, sin índice aproximado para no perder resultados).
   - El sílabo guardado entra solo a la biblioteca (trigger; `is_syllabus`, sus archivos siguen en el bucket `syllabi`). "Vaciar materia" lo quita y deja el resto del material "sin ordenar".
   - Chat: solo se guardan las citas `[n]` que estaban entre las fuentes dadas al modelo; el párrafo "**Conocimiento general:**" marca lo que no viene del material.
+  - Si Gemini responde 503 (modelo saturado), el cliente pasa al modelo más liviano (Pro → main, main → fast) en el siguiente reintento. Los 429 se reintentan con el mismo modelo.
+  - El sílabo se acepta si la IA encuentra unidades aunque dude; si lo rechaza, el mensaje dice qué parece ser el documento.
   - Precios de modelos en `src/lib/ai/pricing.ts`: verificarlos contra la página oficial al cambiar de modelo.
   - Modelos: los 2.5 ya no están disponibles para proyectos nuevos de Google (oct. 2026). Por defecto `gemini-3.8-flash` (main), `gemini-3.5-flash-lite` (fast) y `gemini-embedding-001` (embedding).
   - Producción: Vercel (proyecto `focuss`, https://focuss-alpha.vercel.app) publica `main` automáticamente.

@@ -13,7 +13,8 @@ Rules:
 - unit_numbers: 1-based positions in your units list of the units an evaluation covers, only when the document says which content it covers.
 - bibliography: one entry per reference as a single citation string; kind is "basic" or "complementary" only when the document classifies it.
 - warnings: at most 8 short notes in Spanish about anything ambiguous the student should check. Empty when everything is clear.
-- If the document is not a syllabus or course program, set is_syllabus to false and leave every list empty.`;
+- A syllabus may be called sílabo, sílabus, programa analítico, plan analítico, programa de asignatura, PEA, plan de curso, guía docente, guía didáctica, microcurrículo, plan de clases or cronograma. Any of these counts even if some sections are missing, and so does any document that lists a course's contents, units or schedule.
+- Set is_syllabus to false only when the document does not describe how a course is organized (for example class slides, a book chapter, notes, an exam or something unrelated). Then explain in not_syllabus_reason, in one short sentence in Spanish, what the document seems to be, and leave every list empty.`;
 
   const instruction =
     input.imageCount > 1

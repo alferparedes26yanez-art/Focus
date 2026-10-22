@@ -66,6 +66,15 @@ export function getModel(tier: ModelTier): string {
   return model;
 }
 
+// When a model is overloaded (503), the call moves to a lighter one so the
+// student is not left waiting: Pro → main, main → Flash-Lite.
+function getFallbackModel(tier: ModelTier, model: string): string | undefined {
+  if (tier !== "main" && tier !== "deep") return undefined;
+  const env = getAiEnv();
+  const fallback = tier === "deep" ? env.AI_MODEL_MAIN : env.AI_MODEL_FAST;
+  return fallback && fallback !== model ? fallback : undefined;
+}
+
 // Gemini 2.5 uses a token budget for thinking; Gemini 3+ uses levels.
 function getThinkingConfig(model: string, effort: "low" | "default"): ThinkingConfig | undefined {
   if (effort === "default") return undefined;
@@ -118,6 +127,7 @@ type CallContext = {
   tier: ModelTier;
   model: string;
   deadline: number;
+  fallbackModel?: string;
 };
 
 async function ensureBudget() {
@@ -130,12 +140,14 @@ async function ensureBudget() {
 }
 
 // Runs one API request with retries. `usageOf` returns what to record when it
-// succeeds, or null when the caller records it later (streams).
+// succeeds, or null when the caller records it later (streams). `request`
+// receives the model to use, which changes if the first one is overloaded.
 async function callWithRetry<T>(
   context: CallContext,
-  request: (timeoutMs: number) => Promise<T>,
-  usageOf: (response: T) => Usage | null,
+  request: (timeoutMs: number, model: string) => Promise<T>,
+  usageOf: (response: T, model: string) => Usage | null,
 ): Promise<T> {
+  let model = context.model;
   for (let attempt = 0; ; attempt++) {
     const timeoutMs = Math.min(MAX_CALL_MS, context.deadline - Date.now());
     if (timeoutMs < MIN_CALL_MS) {
@@ -144,13 +156,13 @@ async function callWithRetry<T>(
 
     const startedAt = Date.now();
     try {
-      const response = await request(timeoutMs);
-      const usage = usageOf(response);
+      const response = await request(timeoutMs, model);
+      const usage = usageOf(response, model);
       if (usage) {
         await recordUsage({
           userId: context.userId,
           feature: context.feature,
-          model: context.model,
+          model,
           ...usage,
           status: "success",
           durationMs: Date.now() - startedAt,
@@ -162,13 +174,18 @@ async function callWithRetry<T>(
       await recordUsage({
         userId: context.userId,
         feature: context.feature,
-        model: context.model,
+        model,
         inputTokens: 0,
         outputTokens: 0,
         status: "error",
         errorCode: status ? `http_${status}` : error instanceof Error ? error.name : "unknown",
         durationMs: Date.now() - startedAt,
       });
+
+      if (status === 503 && context.fallbackModel && model !== context.fallbackModel) {
+        console.warn(`[ai] ${context.feature}: ${model} is overloaded, using ${context.fallbackModel}`);
+        model = context.fallbackModel;
+      }
 
       const retryable = isRetryableError(error);
       const delay = getRetryDelayMs(attempt, error);
@@ -182,7 +199,7 @@ async function callWithRetry<T>(
       console.error(`[ai] ${context.feature} failed:`, error);
       if (retryable) throw busyError(error);
       const message = error instanceof Error ? error.message : "";
-      const setupProblem = describeGeminiSetupError(status, message, context.model, context.tier);
+      const setupProblem = describeGeminiSetupError(status, message, model, context.tier);
       if (setupProblem) {
         const available =
           status === 404
@@ -241,6 +258,7 @@ export async function generateJson<T extends z.ZodType>(
     tier: options.tier,
     model,
     deadline: options.deadline,
+    fallbackModel: getFallbackModel(options.tier, model),
   };
   const responseJsonSchema = toResponseSchema(options.schema);
   let maxOutputTokens = options.maxOutputTokens ?? 8_192;
@@ -263,9 +281,9 @@ export async function generateJson<T extends z.ZodType>(
       response = await limiter.run(() =>
         callWithRetry(
           context,
-          (timeoutMs) =>
+          (timeoutMs, activeModel) =>
             getGenAI().models.generateContent({
-              model,
+              model: activeModel,
               contents: [{ role: "user", parts }],
               config: {
                 systemInstruction: options.systemInstruction,
@@ -273,7 +291,7 @@ export async function generateJson<T extends z.ZodType>(
                 responseJsonSchema: schemaInPrompt ? undefined : responseJsonSchema,
                 maxOutputTokens,
                 temperature: 0.2,
-                thinkingConfig: getThinkingConfig(model, options.thinking ?? "low"),
+                thinkingConfig: getThinkingConfig(activeModel, options.thinking ?? "low"),
                 mediaResolution: options.mediaResolution,
                 httpOptions: { timeout: timeoutMs },
               },
@@ -352,9 +370,9 @@ export async function embedTexts(options: {
     const response = await limiter.run(() =>
       callWithRetry(
         context,
-        (timeoutMs) =>
+        (timeoutMs, activeModel) =>
           getGenAI().models.embedContent({
-            model,
+            model: activeModel,
             contents: batch,
             config: {
               taskType: options.purpose === "query" ? "RETRIEVAL_QUERY" : "RETRIEVAL_DOCUMENT",
@@ -394,23 +412,27 @@ export async function streamText(options: {
     tier: options.tier,
     model,
     deadline: options.deadline,
+    fallbackModel: getFallbackModel(options.tier, model),
   };
   const startedAt = Date.now();
+  let usedModel = model;
   const stream = await limiter.run(() =>
     callWithRetry(
       context,
-      (timeoutMs) =>
-        getGenAI().models.generateContentStream({
-          model,
+      (timeoutMs, activeModel) => {
+        usedModel = activeModel;
+        return getGenAI().models.generateContentStream({
+          model: activeModel,
           contents: options.contents,
           config: {
             systemInstruction: options.systemInstruction,
             maxOutputTokens: options.maxOutputTokens ?? 4_096,
             temperature: 0.3,
-            thinkingConfig: getThinkingConfig(model, "low"),
+            thinkingConfig: getThinkingConfig(activeModel, "low"),
             httpOptions: { timeout: timeoutMs },
           },
-        }),
+        });
+      },
       () => null,
     ),
   );
@@ -432,7 +454,7 @@ export async function streamText(options: {
       await recordUsage({
         userId: options.userId,
         feature: options.feature,
-        model,
+        model: usedModel,
         ...(last ? readUsage(last) : { inputTokens: 0, outputTokens: 0 }),
         status: failed ? "error" : "success",
         durationMs: Date.now() - startedAt,

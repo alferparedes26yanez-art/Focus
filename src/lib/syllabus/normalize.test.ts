@@ -6,6 +6,7 @@ import type { SyllabusAiOutput } from "./schemas";
 function output(overrides: Partial<SyllabusAiOutput> = {}): SyllabusAiOutput {
   return {
     is_syllabus: true,
+    not_syllabus_reason: null,
     course_term: "2026-2",
     teacher: { name: "  Dra.   Ana Pérez ", email: "ana@uni.edu.ec", notes: null },
     units: [
@@ -125,8 +126,25 @@ describe("normalizeSyllabusOutput", () => {
     expect(draft.warnings).toContain("La fecha de «Parcial 1» parece de otro año: revísala.");
   });
 
-  it("reports documents that are not a syllabus", () => {
-    const result = normalizeSyllabusOutput(output({ is_syllabus: false }), { today });
+  it("reports documents that are not a syllabus, with the reason", () => {
+    const result = normalizeSyllabusOutput(
+      output({
+        is_syllabus: false,
+        not_syllabus_reason: "  Parece una presentación de clase. ",
+        units: [],
+        events: [],
+        bibliography: [],
+      }),
+      { today },
+    );
     expect(result.isSyllabus).toBe(false);
+    expect(result.notSyllabusReason).toBe("Parece una presentación de clase.");
+  });
+
+  it("accepts a doubtful document when the course contents were found", () => {
+    const result = normalizeSyllabusOutput(output({ is_syllabus: false, not_syllabus_reason: "Dudoso" }), { today });
+    expect(result.isSyllabus).toBe(true);
+    expect(result.notSyllabusReason).toBeNull();
+    expect(result.draft.warnings.some((warning) => warning.includes("no está segura"))).toBe(true);
   });
 });

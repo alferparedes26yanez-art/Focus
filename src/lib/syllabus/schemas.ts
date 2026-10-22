@@ -7,7 +7,11 @@ import { EVENT_KINDS } from "@/lib/constants/events";
 export const syllabusAiOutputSchema = z.object({
   is_syllabus: z
     .boolean()
-    .describe("false when the document is clearly not a course syllabus or program"),
+    .describe("true for any document that organizes a course (contents, units or schedule); false only when it clearly does not"),
+  not_syllabus_reason: z
+    .string()
+    .nullable()
+    .describe("Only when is_syllabus is false: one short sentence in Spanish saying what the document seems to be. Otherwise null"),
   course_term: z
     .string()
     .nullable()
