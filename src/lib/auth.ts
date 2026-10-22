@@ -1,6 +1,7 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { cache } from "react";
 
 import { createClient } from "@/lib/supabase/server";
@@ -9,6 +10,9 @@ import { createClient } from "@/lib/supabase/server";
 // loader calls one of these instead of trusting anything from the client.
 
 export const getSession = cache(async () => {
+  // Session data is per request. Reading it also checks token expiry with the
+  // current time, which Next.js only allows once rendering waits for a request.
+  await connection();
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;

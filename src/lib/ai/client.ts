@@ -70,6 +70,30 @@ function getThinkingConfig(model: string, effort: "low" | "default"): ThinkingCo
   return undefined;
 }
 
+// When a model is not found, ask the API which models this key can use so the
+// error message can name valid ones. Text models first, Flash before others.
+async function listAvailableModels(): Promise<string[]> {
+  try {
+    const pager = await getGenAI().models.list({ config: { pageSize: 100, queryBase: true } });
+    const names: string[] = [];
+    for await (const model of pager) {
+      const id = model.name?.replace(/^models\//, "");
+      if (
+        id &&
+        id.startsWith("gemini-") &&
+        (model.supportedActions ?? []).includes("generateContent") &&
+        !/tts|image|audio|live|embedding|robotics|computer/.test(id)
+      ) {
+        names.push(id);
+      }
+    }
+    return names.sort((a, b) => Number(b.includes("flash")) - Number(a.includes("flash"))).slice(0, 8);
+  } catch (error) {
+    console.error("[ai] could not list models:", error);
+    return [];
+  }
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -139,7 +163,12 @@ async function callWithRetry(
       const message = error instanceof Error ? error.message : "";
       const setupProblem = describeGeminiSetupError(status, message, context.model, context.tier);
       if (setupProblem) {
-        throw notConfiguredError(setupProblem, error);
+        const available = status === 404 ? await listAvailableModels() : [];
+        if (available.length > 0) console.warn("[ai] models available for this key:", available.join(", "));
+        throw notConfiguredError(
+          available.length > 0 ? `${setupProblem} Modelos disponibles: ${available.join(", ")}.` : setupProblem,
+          error,
+        );
       }
       throw requestFailedError(error);
     }
