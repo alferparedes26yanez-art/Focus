@@ -8,6 +8,9 @@
 export type ModelPrice = { input: number; output: number };
 
 export const MODEL_PRICES: Record<string, ModelPrice> = {
+  // Introductory price is half until Dec 31, 2026; the regular one is used so
+  // the budget errs on the safe side.
+  "gemini-3.8-flash": { input: 1.5, output: 7.5 },
   "gemini-3.6-flash": { input: 1.5, output: 7.5 },
   "gemini-3.5-flash": { input: 1.5, output: 9 },
   "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },

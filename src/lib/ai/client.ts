@@ -9,6 +9,7 @@ import {
 } from "@google/genai";
 import { z } from "zod";
 
+import { ConfigError } from "@/lib/env/config-error";
 import { getAiEnv } from "@/lib/env/server";
 
 import { assertWithinBudget } from "./budget";
@@ -16,13 +17,14 @@ import { AiError, busyError, invalidOutputError, notConfiguredError, requestFail
 import type { AiFeature } from "./features";
 import { ConcurrencyLimiter } from "./limiter";
 import { getErrorStatus, getRetryDelayMs, isRetryableError, RETRY_DELAYS_MS } from "./retry";
+import { describeGeminiSetupError, MODEL_ENV_NAMES, type ModelTier } from "./setup-errors";
 import { recordUsage } from "./usage";
 
 // The only way the app talks to Gemini. Every call goes through here so that
 // it respects the monthly budget, retries rate limits with backoff, waits its
 // turn in the queue and is recorded in ai_usage.
 
-export type ModelTier = "main" | "fast" | "deep";
+export type { ModelTier };
 
 const MAX_CONCURRENT_CALLS = 2;
 const MAX_CALL_MS = 45_000;
@@ -43,7 +45,7 @@ export function getModel(tier: ModelTier): string {
   try {
     env = getAiEnv();
   } catch (error) {
-    throw notConfiguredError(error);
+    throw notConfiguredError(error instanceof ConfigError ? error.message : undefined, error);
   }
   const model = {
     main: env.AI_MODEL_MAIN,
@@ -51,7 +53,7 @@ export function getModel(tier: ModelTier): string {
     deep: env.AI_MODEL_DEEP,
   }[tier];
   if (!model) {
-    throw notConfiguredError(new Error(`Missing model for tier "${tier}"`));
+    throw notConfiguredError(`falta la variable ${MODEL_ENV_NAMES[tier]}.`);
   }
   return model;
 }
@@ -83,6 +85,7 @@ function readUsage(response: GenerateContentResponse) {
 type CallContext = {
   feature: AiFeature;
   userId: string;
+  tier: ModelTier;
   model: string;
   deadline: number;
 };
@@ -134,9 +137,9 @@ async function callWithRetry(
       console.error(`[ai] ${context.feature} failed:`, error);
       if (retryable) throw busyError(error);
       const message = error instanceof Error ? error.message : "";
-      if (status === 401 || status === 403 || status === 404 || /API key not valid/i.test(message)) {
-        // Bad key or unknown model name.
-        throw notConfiguredError(error);
+      const setupProblem = describeGeminiSetupError(status, message, context.model, context.tier);
+      if (setupProblem) {
+        throw notConfiguredError(setupProblem, error);
       }
       throw requestFailedError(error);
     }
@@ -185,6 +188,7 @@ export async function generateJson<T extends z.ZodType>(
   const context: CallContext = {
     feature: options.feature,
     userId: options.userId,
+    tier: options.tier,
     model,
     deadline: options.deadline,
   };

@@ -55,10 +55,12 @@ export function requestFailedError(cause?: unknown) {
   );
 }
 
-export function notConfiguredError(cause?: unknown) {
+export function notConfiguredError(detail?: string, cause?: unknown) {
   return new AiError(
     "not_configured",
-    "La IA no está configurada todavía. Revisa las variables de entorno.",
+    detail
+      ? `La IA no está configurada: ${detail}`
+      : "La IA no está configurada todavía. Revisa las variables de entorno.",
     { cause },
   );
 }

@@ -60,3 +60,5 @@ La especificación completa está en `SPEC.md`. Léela antes de empezar o planif
   - Para cargar otro sílabo hay que vaciar la materia (botón "Vaciar"), no se reemplaza automáticamente.
   - El PDF y las fotos del sílabo van directo a Gemini (lee tablas y escaneos); Word se convierte a HTML con `mammoth`. El parser de PDF por página llega en la fase 2.
   - Precios de modelos en `src/lib/ai/pricing.ts`: verificarlos contra la página oficial al cambiar de modelo.
+  - Modelos: los 2.5 ya no están disponibles para proyectos nuevos de Google (oct. 2026). Por defecto `gemini-3.8-flash` (main) y `gemini-3.5-flash-lite` (fast).
+  - Producción: Vercel (proyecto `focuss`, https://focuss-alpha.vercel.app) publica `main` automáticamente.
