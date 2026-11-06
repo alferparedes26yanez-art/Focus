@@ -16,7 +16,7 @@ export const citationSchema = z.object({
   chunk_id: z.string(),
   material_id: z.string(),
   title: z.string(),
-  kind: z.enum(["pdf", "docx", "pptx", "images", "web", "youtube"]),
+  kind: z.enum(["pdf", "docx", "pptx", "images", "web", "youtube", "html", "text"]),
   page: z.number().int().nullable(),
   start_seconds: z.number().int().nullable(),
   section: z.string().nullable(),

@@ -1,6 +1,6 @@
 // Material shapes shared by the server loaders and the client components.
 
-export type MaterialKind = "pdf" | "docx" | "pptx" | "images" | "web" | "youtube";
+export type MaterialKind = "pdf" | "docx" | "pptx" | "images" | "web" | "youtube" | "html" | "text";
 export type MaterialStatus = "uploading" | "queued" | "processing" | "ready" | "failed";
 // user: chosen by the student · ai: suggested by the AI · general: whole
 // subject · pending: waiting to be classified
@@ -29,6 +29,8 @@ export const MATERIAL_KIND_LABELS: Record<MaterialKind, string> = {
   images: "Fotos",
   web: "Página web",
   youtube: "Video",
+  html: "HTML",
+  text: "Texto",
 };
 
 // What a "unit" of progress is for each kind (pages, slides, photos...).
@@ -40,6 +42,8 @@ export function progressNoun(kind: MaterialKind, count: number): string {
     docx: ["fragmento", "fragmentos"],
     web: ["fragmento", "fragmentos"],
     youtube: ["parte", "partes"],
+    html: ["fragmento", "fragmentos"],
+    text: ["fragmento", "fragmentos"],
   };
   return nouns[kind][count === 1 ? 0 : 1];
 }

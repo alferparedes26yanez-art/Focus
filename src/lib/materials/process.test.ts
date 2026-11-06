@@ -12,6 +12,12 @@ const ai = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/ai/client", () => ai);
 
+const web = vi.hoisted(() => ({ fetchPublicResource: vi.fn() }));
+vi.mock("./extract/web", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./extract/web")>()),
+  fetchPublicResource: web.fetchPublicResource,
+}));
+
 type Material = Record<string, unknown> & { id: string; processed_units: number; status: string };
 type Chunk = { page: number | null; start_seconds: number | null; content: string };
 
@@ -86,6 +92,10 @@ function fakeSupabase(material: Material, files: Record<string, Buffer>, topics:
           files[path]
             ? { data: new Blob([new Uint8Array(files[path])]), error: null }
             : { data: null, error: { message: "not found" } },
+        upload: async (path: string, body: Uint8Array) => {
+          files[path] = Buffer.from(body);
+          return { data: { path }, error: null };
+        },
       }),
     },
     rpc: async (name: string, args: Record<string, unknown>) => {
@@ -146,6 +156,7 @@ const run = (client: ServerSupabase) =>
 beforeEach(() => {
   ai.embedTexts.mockClear();
   ai.generateJson.mockReset();
+  web.fetchPublicResource.mockReset();
 });
 
 describe("processMaterialBatch", () => {
@@ -248,4 +259,76 @@ describe("processMaterialBatch", () => {
     expect(await run(client)).toMatchObject({ ok: false, status: 422 });
     expect(material.error).toMatch(/No pudimos abrir este PDF/);
   });
+
+  it("reads a saved web page (.html) by sections and takes its title", async () => {
+    const material = newMaterial({
+      kind: "html",
+      title: "tema3",
+      files: [{ path: "u/s/m1/1-tema3.html", name: "tema3.html", mime_type: "text/html", size: 900 }],
+    });
+    const html = `<html><head><meta charset="windows-1252"><title>Tema 3: Normalización</title></head><body>
+      <h2>Primera forma normal</h2><p>Valores atómicos y sin grupos repetidos en cada fila de la tabla.</p>
+      <h2>Segunda forma normal</h2><p>Cada atributo no clave depende de toda la clave primaria.</p></body></html>`;
+    const { client, chunks } = fakeSupabase(material, { "u/s/m1/1-tema3.html": Buffer.from(html, "latin1") });
+
+    expect(await run(client)).toMatchObject({ ok: true, status: "ready" });
+    expect(material.title).toBe("Tema 3: Normalización");
+    expect(chunks.map((chunk) => chunk.content).join(" ")).toContain("atómicos");
+  });
+
+  it("reads Markdown notes", async () => {
+    const material = newMaterial({
+      kind: "text",
+      title: "resumen",
+      files: [{ path: "u/s/m1/1-resumen.md", name: "resumen.md", mime_type: "text/markdown", size: 80 }],
+    });
+    const { client, chunks } = fakeSupabase(material, {
+      "u/s/m1/1-resumen.md": Buffer.from("# SQL\nSELECT consulta filas.\n# DDL\nCREATE crea tablas."),
+    });
+
+    expect(await run(client)).toMatchObject({ ok: true, status: "ready", total: 2 });
+    expect(chunks.map((chunk) => chunk.content)).toEqual(["SELECT consulta filas.", "CREATE crea tablas."]);
+  });
+
+  it("turns a link to a PDF into a PDF material and then reads it by pages", async () => {
+    const material = newMaterial({
+      kind: "web",
+      title: "Documento de Google",
+      files: [],
+      source_url: "https://docs.google.com/document/d/1AbCdEfGhIjKlMn/edit",
+    });
+    const pdf = await makePdf([`${LONG} Pagina uno.`, `${LONG} Pagina dos.`]);
+    web.fetchPublicResource.mockResolvedValueOnce({
+      url: new URL("https://doc-0s-docs.googleusercontent.com/export/abc"),
+      contentType: "application/pdf",
+      fileName: "Guía de SQL.pdf",
+      bytes: new Uint8Array(pdf),
+    });
+    const files: Record<string, Buffer> = {};
+    const { client, chunks } = fakeSupabase(material, files);
+
+    expect(await run(client)).toEqual({ ok: true, status: "processing", processed: 0, total: null });
+    expect(web.fetchPublicResource.mock.calls[0][0]).toBe("https://docs.google.com/document/d/1AbCdEfGhIjKlMn/export?format=pdf");
+    expect(material).toMatchObject({ kind: "pdf", title: "Guía de SQL", storage_bucket: "materials" });
+    expect(Object.keys(files)).toEqual(["u1/s1/m1/1-Guia-de-SQL.pdf"]);
+
+    expect(await run(client)).toMatchObject({ ok: true, status: "ready", processed: 2, total: 2 });
+    expect(chunks.map((chunk) => chunk.page)).toEqual([1, 2]);
+    expect(material.source_url).toBe("https://docs.google.com/document/d/1AbCdEfGhIjKlMn/edit");
+  });
+
+  it("explains how to share a Google file that is not public", async () => {
+    const material = newMaterial({ kind: "web", title: "Archivo de Google Drive", files: [], source_url: "https://drive.google.com/file/d/1AbCdEfGhIjKlMn/view" });
+    web.fetchPublicResource.mockResolvedValueOnce({
+      url: new URL("https://accounts.google.com/ServiceLogin"),
+      contentType: "text/html; charset=utf-8",
+      fileName: null,
+      bytes: new TextEncoder().encode("<html><body>Inicia sesión</body></html>"),
+    });
+    const { client } = fakeSupabase(material, {});
+
+    expect(await run(client)).toMatchObject({ ok: false, status: 422 });
+    expect(material.error).toMatch(/no es público/);
+  });
 });
+

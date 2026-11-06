@@ -1,4 +1,14 @@
-import { FileText, FileType, Globe, Images, MonitorPlay, Presentation, type LucideIcon } from "lucide-react";
+import {
+  FileCode,
+  FileText,
+  FileType,
+  Globe,
+  Images,
+  MonitorPlay,
+  NotebookText,
+  Presentation,
+  type LucideIcon,
+} from "lucide-react";
 
 import type { MaterialKind } from "@/lib/materials/types";
 import { cn } from "@/lib/utils";
@@ -10,6 +20,8 @@ const ICONS: Record<MaterialKind, LucideIcon> = {
   images: Images,
   web: Globe,
   youtube: MonitorPlay,
+  html: FileCode,
+  text: NotebookText,
 };
 
 const TONES: Record<MaterialKind, string> = {
@@ -19,6 +31,8 @@ const TONES: Record<MaterialKind, string> = {
   images: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
   web: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
   youtube: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  html: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  text: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
 };
 
 export function MaterialIcon({ kind, className }: { kind: MaterialKind; className?: string }) {

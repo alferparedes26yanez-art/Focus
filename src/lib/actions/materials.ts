@@ -8,6 +8,7 @@ import { getModel } from "@/lib/ai/client";
 import { AiError } from "@/lib/ai/errors";
 import { estimateVideoCostUsd } from "@/lib/ai/pricing";
 import { requireUser } from "@/lib/auth";
+import { LinkError, resolveDocumentLink } from "@/lib/materials/extract/links";
 import { assertPublicUrl, WebPageError, webPlaceholderTitle } from "@/lib/materials/extract/web";
 import {
   fetchYoutubeInfo,
@@ -200,6 +201,12 @@ export async function addWebMaterial(
   const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;
   if (parseYoutubeId(withProtocol)) {
     return { ok: false, error: "Es un video de YouTube: agrégalo con la opción «Video de YouTube»." };
+  }
+  try {
+    resolveDocumentLink(withProtocol);
+  } catch (error) {
+    if (error instanceof LinkError) return { ok: false, error: error.message };
+    throw error;
   }
 
   let url: URL;

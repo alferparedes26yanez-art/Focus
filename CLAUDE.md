@@ -52,7 +52,7 @@ La especificación completa está en `SPEC.md`. Léela antes de empezar o planif
 - `npm run db:test` (migraciones + pruebas RLS en un Postgres local) · `npm run db:types` (regenera `src/types/database.ts`)
 
 ## Estado actual
-- Fase actual: cierre de la Fase 2 (material y chat con citas): migraciones 0700 y 0800 aplicadas en producción; falta la prueba de aceptación con un PDF real y agregar .html, .txt, .md y links a documentos (PDF/Word/PPTX, Google Drive/Docs/Slides). Siguen la Fase 2.5 (Cuaderno) y la Fase 3 (Estudio, con quiz rápido y revisión de tareas). Orden aprobado por el usuario.
+- Fase actual: cierre de la Fase 2 (material y chat con citas). Hecho y publicado: .html, .txt, .md y links a documentos (PDF/Word/PPTX, Google Drive/Docs/Slides); migraciones 0700, 0800 y 0900 aplicadas en producción. Falta que el usuario haga la prueba de aceptación con un PDF real. Siguen la Fase 2.5 (Cuaderno, plan por aprobar) y la Fase 3 (Estudio, con quiz rápido y revisión de tareas). Orden aprobado por el usuario.
 - Notas:
   - Next.js 16 con Cache Components: todo lo que lee sesión, `params` o `searchParams` va dentro de `<Suspense>`. `AGENTS.md` apunta a la documentación de Next incluida en `node_modules/next/dist/docs/`: léela antes de usar una API de Next.
   - Las evaluaciones se vinculan a unidades (`event_units`), no a temas: un tema nuevo en una unidad entra solo en sus exámenes.
@@ -72,3 +72,5 @@ La especificación completa está en `SPEC.md`. Léela antes de empezar o planif
   - Precios de modelos en `src/lib/ai/pricing.ts`: verificarlos contra la página oficial al cambiar de modelo.
   - Modelos: los 2.5 ya no están disponibles para proyectos nuevos de Google (oct. 2026). Por defecto `gemini-3.8-flash` (main), `gemini-3.5-flash-lite` (fast) y `gemini-embedding-001` (embedding).
   - Producción: Vercel (proyecto `focuss`, https://focuss-alpha.vercel.app) publica `main` automáticamente.
+  - Migraciones en producción: el entorno de Claude "Focus" tiene un token de Supabase para `api.supabase.com` (lo inyecta el proxy). Se aplican con `POST https://api.supabase.com/v1/projects/emmtgxjacovhmcdbrxvx/database/query` dentro de `begin; … commit;`, después de `npm run db:test` y antes de publicar el código que las usa.
+  - Enlaces: `extract/links.ts` convierte Google Docs/Slides/Sheets a PDF y Drive a descarga directa; un enlace que resulta ser PDF/Word/PPTX se guarda en Storage y el material pasa a ese tipo (conserva `source_url`). Un HTML recibido de Google significa que el archivo no es público.

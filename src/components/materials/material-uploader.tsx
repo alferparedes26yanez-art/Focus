@@ -157,8 +157,8 @@ export function MaterialUploader({ subjectId, units }: { subjectId: string; unit
         <div className="space-y-1">
           <p className="font-medium">Agrega material de estudio</p>
           <p className="text-sm text-muted-foreground">
-            Diapositivas, documentos y libros en PDF, Word o PowerPoint (.pptx), fotos de apuntes, páginas web y
-            videos de YouTube.
+            PDF, Word, PowerPoint (.pptx), páginas guardadas (.html), texto (.txt, .md), fotos de apuntes, enlaces
+            (también de Google Drive) y videos de YouTube.
           </p>
         </div>
         <div className="flex flex-wrap justify-center gap-2">
@@ -178,7 +178,7 @@ export function MaterialUploader({ subjectId, units }: { subjectId: string; unit
           </Button>
           <Button type="button" variant="outline" onClick={() => setDialog("web")} disabled={busy}>
             <Globe />
-            Enlace web
+            Enlace
           </Button>
           <Button type="button" variant="outline" onClick={() => setDialog("youtube")} disabled={busy}>
             <MonitorPlay />

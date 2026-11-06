@@ -186,11 +186,19 @@ export function MaterialViewer({ detail, focus }: { detail: MaterialDetail; focu
             </a>
           </Button>
         ) : null}
-        {material.kind === "web" && material.source_url ? (
+        {(material.kind === "html" || material.kind === "text") && file ? (
+          <Button asChild variant="outline">
+            <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name}>
+              <Download />
+              Descargar archivo
+            </a>
+          </Button>
+        ) : null}
+        {material.source_url ? (
           <Button asChild variant="outline">
             <a href={material.source_url} target="_blank" rel="noopener noreferrer">
               <ExternalLink />
-              Abrir la página original
+              {material.kind === "web" ? "Abrir la página original" : "Abrir el enlace original"}
             </a>
           </Button>
         ) : null}

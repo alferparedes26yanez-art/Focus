@@ -10,11 +10,30 @@ import { storedFileSchema, type StoredFile } from "@/lib/syllabus/prepare-files"
 
 import { chunkUnits, type ChunkDraft, type SourceUnit } from "./chunk";
 import { classifyMaterial } from "./classify";
+import { decodeText, sniffHtmlCharset } from "./extract/decode";
 import { readDocxSections } from "./extract/docx";
+import { readHtmlArticle } from "./extract/html";
+import { googleNotSharedMessage, LinkError, resolveDocumentLink } from "./extract/links";
 import { MIN_PAGE_TEXT, pdfWithPages, readPdfPages } from "./extract/pdf";
 import { readPptxSlides } from "./extract/pptx";
-import { readWebPage, WebPageError, webPlaceholderTitle } from "./extract/web";
+import { readTextSections } from "./extract/text";
+import {
+  documentMimeOf,
+  fetchPublicResource,
+  isHtmlResource,
+  readFetchedPage,
+  WebPageError,
+  webPlaceholderTitle,
+} from "./extract/web";
 import { toVideoSeconds, VIDEO_SEGMENT_SECONDS } from "./extract/youtube";
+import {
+  kindForMime,
+  MARKDOWN_MIME,
+  MATERIALS_BUCKET,
+  MAX_MATERIAL_FILE_BYTES,
+  storageFileName,
+  titleFromFileName,
+} from "./files";
 import { pagesTranscriptSchema, videoTranscriptSchema } from "./schemas";
 
 // Material is read in batches, one per request, so every request fits in the
@@ -31,6 +50,8 @@ const SLIDES_PER_BATCH = 40;
 const PHOTOS_PER_BATCH = 4;
 const CHUNKS_PER_BATCH = 60;
 const MAX_WEB_CHUNKS = 120;
+// Downloading a linked document (up to 50 MB) may take a while.
+const LINK_TIMEOUT_MS = 40_000;
 // Gemini accepts up to 20 MB of inline data per request.
 const MAX_INLINE_BYTES = 18 * 1024 * 1024;
 // Time an OCR or video call needs; otherwise the batch waits for a new request.
@@ -60,10 +81,23 @@ class MaterialError extends Error {}
 
 class OutOfTimeError extends Error {}
 
+// A link turned out to be a PDF, Word or PowerPoint file: it is saved and read
+// as that file from the next batch on.
+class LinkedDocumentFound extends Error {
+  constructor(
+    readonly bytes: Uint8Array,
+    readonly mimeType: string,
+    readonly fileName: string | null,
+  ) {
+    super("Linked document");
+  }
+}
+
 type Batch = {
   drafts: ChunkDraft[];
   toUnits: number;
   totalUnits: number;
+  // A better title than the automatic one (the page's own title).
   title?: string | null;
 };
 
@@ -245,18 +279,72 @@ async function readDocxBatch(context: BatchContext, from: number): Promise<Batch
 }
 
 async function readWebBatch(context: BatchContext, from: number): Promise<Batch> {
-  if (!context.material.source_url) throw new MaterialError("Este enlace no es válido.");
+  const sourceUrl = context.material.source_url;
+  if (!sourceUrl) throw new MaterialError("Este enlace no es válido.");
+  let link;
+  try {
+    link = resolveDocumentLink(sourceUrl);
+  } catch (error) {
+    if (error instanceof LinkError) throw new MaterialError(error.message);
+    throw error;
+  }
+
+  let resource;
+  try {
+    resource = await fetchPublicResource(link.url, {
+      maxBytes: MAX_MATERIAL_FILE_BYTES,
+      timeoutMs: Math.max(5_000, Math.min(LINK_TIMEOUT_MS, context.deadline - Date.now() - 10_000)),
+    });
+  } catch (error) {
+    if (error instanceof WebPageError) {
+      // Google answers 401/403/404 for files that are not shared.
+      if (link.google && /\((401|403|404)\)/.test(error.message)) {
+        throw new MaterialError(googleNotSharedMessage(link.google));
+      }
+      throw new MaterialError(error.message);
+    }
+    console.error("[materials] link download failed:", error);
+    throw new MaterialError("No pudimos abrir ese enlace. Inténtalo de nuevo.");
+  }
+
+  const documentMime = documentMimeOf(resource);
+  if (documentMime) throw new LinkedDocumentFound(resource.bytes, documentMime, resource.fileName);
+  if (!isHtmlResource(resource)) {
+    throw new MaterialError("El enlace no es una página web ni un PDF, Word o PowerPoint que podamos leer.");
+  }
+  // A page instead of the file means Google asked to sign in.
+  if (link.google) throw new MaterialError(googleNotSharedMessage(link.google));
+
   let page;
   try {
-    page = await readWebPage(context.material.source_url);
+    page = readFetchedPage(resource);
   } catch (error) {
     if (error instanceof WebPageError) throw new MaterialError(error.message);
-    console.error("[materials] web read failed:", error);
-    throw new MaterialError("No pudimos leer esa página web.");
+    throw error;
   }
   // A page is read in one go (it could change between requests).
   const drafts = chunkUnits(page.sections).slice(0, MAX_WEB_CHUNKS);
-  return { ...sliceDrafts(drafts, from, MAX_WEB_CHUNKS), title: page.title };
+  const automaticTitle = context.material.title === webPlaceholderTitle(sourceUrl);
+  return { ...sliceDrafts(drafts, from, MAX_WEB_CHUNKS), title: automaticTitle ? page.title : null };
+}
+
+// A saved web page (.html): its main content, by sections.
+async function readHtmlFileBatch(context: BatchContext, from: number): Promise<Batch> {
+  const file = materialFiles(context.material)[0];
+  const bytes = await download(context, file);
+  const page = readHtmlArticle(decodeText(bytes, sniffHtmlCharset(bytes)));
+  const automaticTitle = context.material.title === titleFromFileName(file.name);
+  return {
+    ...sliceDrafts(chunkUnits(page.sections), from, CHUNKS_PER_BATCH),
+    title: from === 0 && automaticTitle ? (page.pageTitle ?? page.title) : null,
+  };
+}
+
+async function readTextFileBatch(context: BatchContext, from: number): Promise<Batch> {
+  const file = materialFiles(context.material)[0];
+  const bytes = await download(context, file);
+  const markdown = file.mime_type === MARKDOWN_MIME || /\.(md|markdown)$/i.test(file.name);
+  return sliceDrafts(chunkUnits(readTextSections(decodeText(bytes), { markdown })), from, CHUNKS_PER_BATCH);
 }
 
 async function readVideoBatch(context: BatchContext, from: number): Promise<Batch> {
@@ -322,6 +410,10 @@ function readBatch(context: BatchContext, from: number): Promise<Batch> {
       return readDocxBatch(context, from);
     case "web":
       return readWebBatch(context, from);
+    case "html":
+      return readHtmlFileBatch(context, from);
+    case "text":
+      return readTextFileBatch(context, from);
     case "youtube":
       return readVideoBatch(context, from);
     default:
@@ -336,12 +428,56 @@ const EMPTY_MESSAGES: Record<string, string> = {
   docx: "El documento no tiene texto que podamos leer.",
   web: "No encontramos texto en esa página.",
   youtube: "No encontramos voz ni texto en este video.",
+  html: "No encontramos texto en esa página guardada.",
+  text: "El archivo de texto está vacío.",
 };
 
 // The title (and section) go into the embedding so a fragment is found by
 // what the whole document is about, not only by its own words.
 function embeddingText(title: string, draft: ChunkDraft): string {
   return `${title}${draft.section ? ` — ${draft.section}` : ""}\n\n${draft.content}`;
+}
+
+// Saves a linked PDF/Word/PowerPoint file in Storage and turns the material
+// into that file (the link stays as its original source).
+async function saveLinkedDocument(
+  supabase: ServerSupabase,
+  userId: string,
+  material: MaterialRow,
+  found: LinkedDocumentFound,
+): Promise<boolean> {
+  const kind = kindForMime(found.mimeType);
+  const extension = { pdf: "pdf", docx: "docx", pptx: "pptx" }[kind as "pdf" | "docx" | "pptx"] ?? "pdf";
+  const rawName = found.fileName?.trim() || decodeURIComponent(new URL(material.source_url ?? "https://x/documento").pathname.split("/").pop() ?? "") || "documento";
+  const name = (/\.[a-z0-9]{2,5}$/i.test(rawName) ? rawName : `${rawName}.${extension}`).slice(0, 255);
+  const path = `${userId}/${material.subject_id}/${material.id}/1-${storageFileName(name, found.mimeType)}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(MATERIALS_BUCKET)
+    .upload(path, found.bytes, { contentType: found.mimeType, upsert: false });
+  // A previous attempt may have saved it already.
+  if (uploadError && !/exists|duplicate/i.test(uploadError.message)) {
+    console.error("[materials] linked file upload failed:", uploadError.message);
+    return false;
+  }
+
+  const automaticTitle = material.source_url && material.title === webPlaceholderTitle(material.source_url);
+  const { error } = await supabase
+    .from("materials")
+    .update({
+      kind,
+      storage_bucket: MATERIALS_BUCKET,
+      files: [{ path, name, mime_type: found.mimeType, size: found.bytes.byteLength }],
+      title: automaticTitle ? titleFromFileName(name) : material.title,
+      total_units: null,
+      locked_until: null,
+    })
+    .eq("id", material.id);
+  if (error) {
+    console.error("[materials] linked file save failed:", error.message);
+    return false;
+  }
+  return true;
 }
 
 export async function processMaterialBatch(input: {
@@ -431,8 +567,8 @@ export async function processMaterialBatch(input: {
     }
 
     let title = material.title;
-    if (batch.title && material.source_url && title === webPlaceholderTitle(material.source_url)) {
-      title = batch.title.slice(0, 300);
+    if (batch.title?.trim()) {
+      title = batch.title.trim().slice(0, 300);
       await supabase.from("materials").update({ title }).eq("id", materialId);
     }
 
@@ -473,6 +609,10 @@ export async function processMaterialBatch(input: {
     if (error instanceof OutOfTimeError) {
       await release();
       return { ok: true, status: "processing", processed: from, total: material.total_units };
+    }
+    if (error instanceof LinkedDocumentFound) {
+      const saved = await saveLinkedDocument(supabase, userId, material, error);
+      return saved ? { ok: true, status: "processing", processed: 0, total: null } : fail(500, "No se pudo guardar el archivo del enlace. Inténtalo de nuevo.");
     }
     if (error instanceof MaterialError) return fail(422, error.message);
     if (error instanceof AiError) {

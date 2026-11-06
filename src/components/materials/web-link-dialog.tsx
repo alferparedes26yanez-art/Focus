@@ -57,10 +57,11 @@ export function WebLinkDialog({
       <DialogContent>
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>Agregar una página web</DialogTitle>
+            <DialogTitle>Agregar un enlace</DialogTitle>
             <DialogDescription>
-              Focus guarda el texto del artículo para buscarlo y citarlo. Funciona con páginas públicas (no con las
-              que piden iniciar sesión).
+              Una página web, o el enlace a un PDF, Word o PowerPoint. También Google Docs, Slides y Drive si están
+              compartidos con «cualquier persona con el enlace». Si la página pide iniciar sesión (aula virtual),
+              guárdala con Ctrl + S y súbela como archivo .html.
             </DialogDescription>
           </DialogHeader>
           <FormField label="Enlace" htmlFor={`${ids}-url`} error={error}>

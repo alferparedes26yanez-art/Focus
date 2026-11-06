@@ -392,6 +392,19 @@ select pg_temp.expect(
   and (select max(position) = 2 from public.chunks where material_id = 'aaaaaaaa-0000-0000-0000-0000000000e3'),
   'the last batch marks the material as ready and positions continue');
 
+insert into public.materials (subject_id, topic_source, kind, title, status)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'general', 'html', 'Guía de la clase', 'queued'),
+       ('aaaaaaaa-0000-0000-0000-000000000001', 'general', 'text', 'Resumen.md', 'queued');
+select pg_temp.expect(
+  (select count(*) from public.materials where kind in ('html', 'text')) = 2,
+  'saved web pages and text files can be material');
+select pg_temp.expect_error(
+  $$insert into public.materials (subject_id, kind, title) values ('aaaaaaaa-0000-0000-0000-000000000001', 'exe', 'x')$$,
+  'unknown material kinds are rejected', '%materials_kind_check%');
+select pg_temp.expect(
+  (select allowed_mime_types @> array['text/html', 'text/plain', 'text/markdown'] from storage.buckets where id = 'materials'),
+  'the material bucket accepts HTML and text files');
+
 insert into public.chat_threads (id, subject_id, title)
 values ('aaaaaaaa-0000-0000-0000-0000000000a9', 'aaaaaaaa-0000-0000-0000-000000000001', 'Dudas');
 insert into public.messages (thread_id, role, content)

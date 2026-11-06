@@ -3,17 +3,27 @@
 
 export const MATERIALS_BUCKET = "materials";
 export const MAX_MATERIAL_FILE_BYTES = 50 * 1024 * 1024;
+// Saved web pages and text files are read whole, so they are kept smaller.
+export const MAX_TEXT_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_FILES_PER_UPLOAD = 20;
 export const MAX_PHOTOS_PER_MATERIAL = 20;
 
 export const PDF_MIME = "application/pdf";
 export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 export const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+export const HTML_MIME = "text/html";
+export const TEXT_MIME = "text/plain";
+export const MARKDOWN_MIME = "text/markdown";
 
 const TYPES_BY_EXTENSION: Record<string, string> = {
   pdf: PDF_MIME,
   docx: DOCX_MIME,
   pptx: PPTX_MIME,
+  html: HTML_MIME,
+  htm: HTML_MIME,
+  txt: TEXT_MIME,
+  md: MARKDOWN_MIME,
+  markdown: MARKDOWN_MIME,
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   png: "image/png",
@@ -26,6 +36,9 @@ const EXTENSION_BY_TYPE: Record<string, string> = {
   [PDF_MIME]: "pdf",
   [DOCX_MIME]: "docx",
   [PPTX_MIME]: "pptx",
+  [HTML_MIME]: "html",
+  [TEXT_MIME]: "txt",
+  [MARKDOWN_MIME]: "md",
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
@@ -38,18 +51,24 @@ export const MATERIAL_ACCEPT = [
   ...new Set(Object.values(TYPES_BY_EXTENSION)),
 ].join(",");
 
-export type FileMaterialKind = "pdf" | "docx" | "pptx" | "images";
+export type FileMaterialKind = "pdf" | "docx" | "pptx" | "html" | "text" | "images";
 
+// The extension wins for text files: browsers report .md as text/plain or
+// nothing, and a type alone cannot tell Markdown from plain text.
 export function resolveMaterialMime(file: { name: string; type: string }): string | null {
-  if (EXTENSION_BY_TYPE[file.type]) return file.type;
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  return TYPES_BY_EXTENSION[extension] ?? null;
+  const byExtension = TYPES_BY_EXTENSION[extension];
+  if (byExtension?.startsWith("text/")) return byExtension;
+  if (EXTENSION_BY_TYPE[file.type]) return file.type;
+  return byExtension ?? null;
 }
 
 export function kindForMime(mimeType: string): FileMaterialKind {
   if (mimeType === PDF_MIME) return "pdf";
   if (mimeType === DOCX_MIME) return "docx";
   if (mimeType === PPTX_MIME) return "pptx";
+  if (mimeType === HTML_MIME) return "html";
+  if (mimeType === TEXT_MIME || mimeType === MARKDOWN_MIME) return "text";
   return "images";
 }
 
@@ -99,11 +118,14 @@ export function planMaterials(
     if (!mimeType) {
       return {
         ok: false,
-        error: `«${file.name}» no es un formato aceptado. Usa PDF, Word, PowerPoint (.pptx) o fotos.`,
+        error: `«${file.name}» no es un formato aceptado. Usa PDF, Word, PowerPoint (.pptx), páginas guardadas (.html), texto (.txt, .md) o fotos.`,
       };
     }
     if (file.size <= 0) return { ok: false, error: `«${file.name}» está vacío.` };
     if (file.size > MAX_MATERIAL_FILE_BYTES) return { ok: false, error: `«${file.name}» pesa más de 50 MB.` };
+    if (mimeType.startsWith("text/") && file.size > MAX_TEXT_FILE_BYTES) {
+      return { ok: false, error: `«${file.name}» pesa más de 10 MB.` };
+    }
 
     const entry = { name: file.name, size: file.size, mimeType, index };
     if (kindForMime(mimeType) === "images") photos.push(entry);

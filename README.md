@@ -81,8 +81,9 @@ actualiza *Site URL* y *Redirect URLs* en Supabase con esa URL.
 
 ### Pasar un proyecto existente a la Fase 2
 
-1. En Supabase → *SQL Editor*, ejecuta en orden `20261022000700_materials.sql` y `20261022000800_chat.sql` (o
-   `npx supabase db push`). El sílabo que ya guardaste entra solo a la biblioteca de su materia.
+1. En Supabase → *SQL Editor*, ejecuta en orden `20261022000700_materials.sql`, `20261022000800_chat.sql` y
+   `20261106000900_material_formats.sql` (o `npx supabase db push`). El sílabo que ya guardaste entra solo a la
+   biblioteca de su materia.
 2. En Vercel → *Settings → Environment Variables*, agrega `AI_MODEL_FAST=gemini-3.5-flash-lite` y
    `AI_MODEL_EMBEDDING=gemini-embedding-001`, y vuelve a desplegar (*Deployments → ⋯ → Redeploy*).
 
@@ -104,8 +105,10 @@ actualiza *Site URL* y *Redirect URLs* en Supabase con esa URL.
 1. Abre una materia con sílabo → pestaña **Material**. El sílabo ya aparece en *General*.
 2. Sube un PDF (por ejemplo, las diapositivas de una unidad). Debajo eliges el tema o dejas que la IA lo ordene.
    Mantén la página abierta mientras dice «Focus está leyendo…»: lee el material por partes y muestra el avance.
-3. Prueba también fotos de apuntes (varias fotos = un solo apunte), un Word, un PowerPoint, un enlace web y un video
-   de YouTube (antes de transcribirlo muestra el costo estimado).
+3. Prueba también fotos de apuntes (varias fotos = un solo apunte), un Word, un PowerPoint, una página guardada
+   (.html, por ejemplo del aula virtual con Ctrl + S), un .txt o .md, un enlace web, el enlace a un PDF o a un
+   documento de Google Drive/Docs/Slides compartido con «cualquier persona con el enlace», y un video de YouTube
+   (antes de transcribirlo muestra el costo estimado).
 4. Pestaña **Chat**: pregunta algo que esté en una página concreta del PDF. La respuesta debe citarlo con un número;
    al tocarlo se abre el material en esa página (resaltada) y el botón **Abrir el PDF en la página N** abre el
    original justo ahí. Para un video, la cita abre el reproductor en ese minuto.
