@@ -5,6 +5,7 @@ import {
   Globe,
   Images,
   MonitorPlay,
+  NotebookPen,
   NotebookText,
   Presentation,
   type LucideIcon,
@@ -22,6 +23,7 @@ const ICONS: Record<MaterialKind, LucideIcon> = {
   youtube: MonitorPlay,
   html: FileCode,
   text: NotebookText,
+  note: NotebookPen,
 };
 
 const TONES: Record<MaterialKind, string> = {
@@ -33,6 +35,7 @@ const TONES: Record<MaterialKind, string> = {
   youtube: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
   html: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
   text: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
+  note: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
 };
 
 export function MaterialIcon({ kind, className }: { kind: MaterialKind; className?: string }) {

@@ -5,6 +5,7 @@ export const AI_FEATURES = {
   material_indexing: "Indexación de material",
   topic_suggestion: "Clasificación por tema",
   chat: "Asistente (chat)",
+  notebook_images: "Lectura de fotos del cuaderno",
 } as const;
 
 export type AiFeature = keyof typeof AI_FEATURES;

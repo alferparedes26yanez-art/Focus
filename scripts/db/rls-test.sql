@@ -457,6 +457,75 @@ select pg_temp.expect(
 reset role;
 
 -- ---------------------------------------------------------------------------
+\echo '== Phase 2.5: notebook'
+-- ---------------------------------------------------------------------------
+select set_config('request.jwt.claim.sub', :'user_a', false);
+set role authenticated;
+insert into public.notebook_pages (id, subject_id, title, content)
+values ('aaaaaaaa-0000-0000-0000-0000000000b7', 'aaaaaaaa-0000-0000-0000-000000000001', 'Clase 1',
+        '{"type": "doc", "content": [{"type": "paragraph"}]}');
+select pg_temp.expect_error(
+  $$update public.notebook_pages set topic_id = 'aaaaaaaa-0000-0000-0000-0000000000f2'
+    where id = 'aaaaaaaa-0000-0000-0000-0000000000b7'$$,
+  'a page cannot be filed under a topic of another subject', '%topic_not_in_subject%');
+select public.index_notebook_page(
+  'aaaaaaaa-0000-0000-0000-0000000000b7', 'Apuntes del 6 nov · Clase 1',
+  jsonb_build_array(
+    jsonb_build_object('content', 'Normalización: 1FN', 'section', 'Normalización',
+                       'embedding', array_fill(0.1::real, array[768])::extensions.vector::text),
+    jsonb_build_object('content', 'Índices B-tree', 'section', 'Índices',
+                       'embedding', array_fill(0.2::real, array[768])::extensions.vector::text)),
+  'hash-1');
+select pg_temp.expect(
+  (select kind = 'note' and status = 'ready' and total_units = 2 and content_hash = 'hash-1' and topic_source = 'general'
+   from public.materials where notebook_page_id = 'aaaaaaaa-0000-0000-0000-0000000000b7')
+  and (select count(*) from public.chunks c join public.materials m on m.id = c.material_id
+       where m.notebook_page_id = 'aaaaaaaa-0000-0000-0000-0000000000b7') = 2,
+  'indexing a page adds it to the library with its fragments');
+select public.index_notebook_page(
+  'aaaaaaaa-0000-0000-0000-0000000000b7', 'Apuntes del 6 nov · Clase 1',
+  jsonb_build_array(jsonb_build_object('content', 'Solo índices', 'section', null,
+                    'embedding', array_fill(0.3::real, array[768])::extensions.vector::text)),
+  'hash-2');
+select pg_temp.expect(
+  (select count(*) from public.chunks c join public.materials m on m.id = c.material_id
+   where m.notebook_page_id = 'aaaaaaaa-0000-0000-0000-0000000000b7') = 1
+  and (select count(*) from public.materials where notebook_page_id = 'aaaaaaaa-0000-0000-0000-0000000000b7') = 1,
+  're-indexing replaces the fragments instead of adding more');
+select pg_temp.expect_error(
+  $$insert into public.materials (subject_id, kind, title) values ('aaaaaaaa-0000-0000-0000-000000000001', 'note', 'x')$$,
+  'a note always belongs to a notebook page', '%materials_note_page%');
+insert into storage.objects (bucket_id, name)
+values ('notebook', :'user_a' || '/aaaaaaaa-0000-0000-0000-000000000001/p/foto.jpg');
+reset role;
+
+select set_config('request.jwt.claim.sub', :'user_b', false);
+set role authenticated;
+select pg_temp.expect((select count(*) from public.notebook_pages) = 0, 'B sees no notebook pages of A');
+select pg_temp.expect_error(
+  $$select public.index_notebook_page('aaaaaaaa-0000-0000-0000-0000000000b7', 'x', '[]', 'h')$$,
+  'B cannot index A''s page', '%page_not_found%');
+update public.notebook_pages set title = 'hack' where id = 'aaaaaaaa-0000-0000-0000-0000000000b7';
+select pg_temp.expect(
+  (select title from public.notebook_pages where id = 'aaaaaaaa-0000-0000-0000-0000000000b7') is null,
+  'A''s page stays hidden from B');
+select pg_temp.expect_error(
+  format($$insert into storage.objects (bucket_id, name) values ('notebook', '%s/s/p/x.jpg')$$, :'user_a'),
+  'B uploads into A''s notebook folder');
+reset role;
+
+select set_config('request.jwt.claim.sub', :'user_a', false);
+set role authenticated;
+select pg_temp.expect(
+  (select title = 'Clase 1' from public.notebook_pages where id = 'aaaaaaaa-0000-0000-0000-0000000000b7'),
+  'B''s attempt to edit A''s page changed nothing');
+delete from public.notebook_pages where id = 'aaaaaaaa-0000-0000-0000-0000000000b7';
+select pg_temp.expect(
+  (select count(*) from public.materials where kind = 'note') = 0,
+  'deleting a page removes it from the library and the search index');
+reset role;
+
+-- ---------------------------------------------------------------------------
 \echo '== Deleting a user'
 -- ---------------------------------------------------------------------------
 delete from auth.users where id = :'user_a';

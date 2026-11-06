@@ -9,6 +9,7 @@ import { SubjectChat } from "@/components/chat/subject-chat";
 import { SubjectEvents } from "@/components/events/subject-events";
 import { PageSkeleton } from "@/components/home/home-skeleton";
 import { MaterialProcessor } from "@/components/materials/material-processor";
+import { NotebookList } from "@/components/notebook/notebook-list";
 import { SubjectMaterials } from "@/components/materials/subject-materials";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SetupNotice } from "@/components/shared/setup-notice";
@@ -21,6 +22,7 @@ import { parseSubjectTab } from "@/lib/constants/subject-tabs";
 import { getChatThreads } from "@/lib/data/chat";
 import { MissingTableError } from "@/lib/data/errors";
 import { getSubjectMaterials } from "@/lib/data/materials";
+import { getNotebookPages } from "@/lib/data/notebook";
 import { getProfile, getSubjectDetail, type SubjectDetail } from "@/lib/data/subjects";
 import type { MaterialView } from "@/lib/materials/types";
 
@@ -38,11 +40,12 @@ async function SubjectContent({ params, searchParams }: PageProps<"/subjects/[su
   const { subjectId } = await params;
   if (!z.uuid().safeParse(subjectId).success) notFound();
 
-  const [subject, profile, query, library] = await Promise.all([
+  const [subject, profile, query, library, notebook] = await Promise.all([
     getSubjectDetail(subjectId),
     getProfile(),
     searchParams,
     getLibrary(subjectId),
+    getNotebook(subjectId),
   ]);
   if (!subject) notFound();
   const { materials, threads } = library;
@@ -102,6 +105,7 @@ async function SubjectContent({ params, searchParams }: PageProps<"/subjects/[su
         defaultTab={tab}
         materialCount={materials.length}
         eventCount={subject.events.length}
+        notebookCount={notebook.pages.length}
         topics={topics}
         materials={
           library.ready ? (
@@ -115,11 +119,25 @@ async function SubjectContent({ params, searchParams }: PageProps<"/subjects/[su
             <SubjectChat
               subjectId={subject.id}
               threads={threads}
-              hasMaterial={materials.some((material) => material.processed_units > 0)}
+              hasMaterial={
+              materials.some((material) => material.processed_units > 0) ||
+              notebook.pages.some((page) => page.preview.length > 0)
+            }
               suggestions={chatSuggestions(subject, materials)}
             />
           ) : (
             <SetupNotice migrations={PHASE_2_MIGRATIONS} />
+          )
+        }
+        notebook={
+          notebook.ready ? (
+            <NotebookList
+              subjectId={subject.id}
+              pages={notebook.pages}
+              topicTitles={Object.fromEntries(subject.units.flatMap((unit) => unit.topics.map((topic) => [topic.id, topic.title])))}
+            />
+          ) : (
+            <SetupNotice migrations={["20261106001000_notebook.sql"]} />
           )
         }
         events={
@@ -147,6 +165,16 @@ async function getLibrary(subjectId: string) {
     if (!(error instanceof MissingTableError)) throw error;
     console.error("[subject] Phase 2 tables are missing:", error.message);
     return { ready: false, materials: [] as MaterialView[], threads: [] };
+  }
+}
+
+async function getNotebook(subjectId: string) {
+  try {
+    return { ready: true, pages: await getNotebookPages(subjectId) };
+  } catch (error) {
+    if (!(error instanceof MissingTableError)) throw error;
+    console.error("[subject] notebook table is missing:", error.message);
+    return { ready: false, pages: [] };
   }
 }
 

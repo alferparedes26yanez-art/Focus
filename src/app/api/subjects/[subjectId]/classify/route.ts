@@ -46,6 +46,7 @@ export async function POST(_request: Request, context: RouteContext<"/api/subjec
       .eq("subject_id", subjectId)
       .eq("topic_source", "pending")
       .eq("is_syllabus", false)
+      .neq("kind", "note")
       .gt("processed_units", 0)
       .order("created_at", { ascending: true });
 

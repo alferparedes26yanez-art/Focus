@@ -3,11 +3,12 @@
 App web (mobile-first) para que estudiantes universitarios organicen y estudien sus materias con ayuda de IA.
 Especificación: [SPEC.md](SPEC.md) · Reglas del proyecto: [CLAUDE.md](CLAUDE.md).
 
-**Estado:** Fase 2 (material y chat con citas).
+**Estado:** Fase 2.5 (cuaderno).
 - Fase 1: registro, materias, sílabo con IA → revisión → unidades, temas y fechas; inicio con próximos exámenes;
   ajustes con el consumo de IA.
 - Fase 2: biblioteca de material (PDF, Word, PowerPoint, fotos, páginas web y YouTube) ordenada según el sílabo, y
   chat por materia que cita el documento y la página (o el minuto) de cada dato.
+- Fase 2.5: cuaderno de apuntes por materia (editor tipo Word con imágenes) que el chat también puede citar.
 
 Stack: Next.js 16 (App Router, Cache Components) · TypeScript · Tailwind 4 + shadcn/ui · Supabase (Auth, Postgres,
 Storage, pgvector) · Gemini (`@google/genai`) · zod.
@@ -120,6 +121,17 @@ foto, ~0,3 centavos; un video de YouTube, ~0,3 centavos por minuto (una clase de
 pregunta del chat, ~1–2 centavos. Con el presupuesto de 9 USD alcanza para unas 400 preguntas al mes además del
 material.
 
+## Cómo probar la Fase 2.5 (Cuaderno)
+
+1. Abre una materia → pestaña **Cuaderno** → **Nueva página**.
+2. Escribe un título y apuntes con la barra: títulos, negrita, resaltado, listas, casillas y tablas. Pega una imagen
+   con Ctrl + V (o con el botón de imagen; en el celular puedes usar la cámara). Arriba dice «Guardado».
+3. Recarga la página: todo sigue ahí. Si la imagen tenía texto (pizarra, diapositiva), la IA lo lee para poder
+   buscarlo (~0,3 centavos por imagen).
+4. Unos segundos después de dejar de escribir, pregunta en **Chat** algo que solo esté en esos apuntes: la cita dice
+   «Apuntes del … · título, «sección»» y te lleva a esa parte de la página, resaltada.
+5. Las páginas que creas y dejas vacías y sin título no aparecen en la lista y se limpian solas.
+
 ## Comandos
 
 | Comando | Qué hace |
@@ -146,5 +158,7 @@ src/lib/ai            cliente único de Gemini: presupuesto, reintentos 429, col
 src/lib/syllabus      archivos aceptados, preparación para Gemini, normalización y esquemas zod
 src/lib/materials     extracción (PDF, Word, PPTX, web, YouTube), fragmentos, procesamiento por lotes, temas
 src/lib/chat          fuentes y citas (solo se conservan las que se dieron al modelo)
+src/lib/notebook      cuaderno: JSON del editor → texto y secciones, índice para el chat, imágenes
+src/components/notebook  editor Tiptap, barra de formato, lista de páginas
 src/lib/actions       Server Actions · src/lib/data: lecturas para las páginas
 ```

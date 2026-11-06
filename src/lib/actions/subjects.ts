@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/auth";
 import { removeMaterialFiles } from "@/lib/materials/storage";
+import { removeNotebookSubjectFiles } from "@/lib/notebook/storage";
 import { removeSyllabusFiles } from "@/lib/syllabus/storage";
 import { subjectInputSchema, type SubjectInput } from "@/lib/validation";
 
@@ -49,7 +50,7 @@ export async function updateSubject(subjectId: string, input: SubjectInput): Pro
 }
 
 export async function deleteSubject(subjectId: string): Promise<ActionResult> {
-  const { supabase } = await requireUser();
+  const { supabase, userId } = await requireUser();
   if (!idSchema.safeParse(subjectId).success) {
     return { ok: false, error: "Materia no válida." };
   }
@@ -57,6 +58,7 @@ export async function deleteSubject(subjectId: string): Promise<ActionResult> {
   const removed = await Promise.all([
     removeSyllabusFiles(supabase, { subjectId }),
     removeMaterialFiles(supabase, { subjectId }),
+    removeNotebookSubjectFiles(supabase, userId, subjectId),
   ]);
   if (removed.includes(false)) {
     return { ok: false, error: "No se pudieron borrar los archivos de la materia. Inténtalo de nuevo." };

@@ -1,7 +1,7 @@
 import { ArrowLeft, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { z } from "zod";
 
@@ -43,6 +43,13 @@ async function MaterialContent({ params, searchParams }: PageProps<"/subjects/[s
 
   const detail = await getMaterialDetail(subjectId, materialId, focus.page);
   if (!detail) notFound();
+  // Notes are read and edited in the notebook, at the cited section.
+  if (detail.notebookPageId) {
+    const section = detail.chunks.find((chunk) => chunk.id === focus.chunkId)?.section;
+    redirect(
+      `/subjects/${subjectId}/notebook/${detail.notebookPageId}${section ? `?section=${encodeURIComponent(section)}` : ""}`,
+    );
+  }
   const { material, subject, topic } = detail;
   const topicLabel = topic
     ? topic.title

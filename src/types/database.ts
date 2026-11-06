@@ -220,6 +220,7 @@ export type Database = {
       };
       materials: {
         Row: {
+          content_hash: string | null;
           created_at: string;
           duration_seconds: number | null;
           error: string | null;
@@ -228,6 +229,7 @@ export type Database = {
           is_syllabus: boolean;
           kind: string;
           locked_until: string | null;
+          notebook_page_id: string | null;
           processed_units: number;
           source_url: string | null;
           status: string;
@@ -242,6 +244,7 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          content_hash?: string | null;
           created_at?: string;
           duration_seconds?: number | null;
           error?: string | null;
@@ -250,6 +253,7 @@ export type Database = {
           is_syllabus?: boolean;
           kind: string;
           locked_until?: string | null;
+          notebook_page_id?: string | null;
           processed_units?: number;
           source_url?: string | null;
           status?: string;
@@ -263,6 +267,7 @@ export type Database = {
           user_id?: string;
         };
         Update: {
+          content_hash?: string | null;
           created_at?: string;
           duration_seconds?: number | null;
           error?: string | null;
@@ -271,6 +276,7 @@ export type Database = {
           is_syllabus?: boolean;
           kind?: string;
           locked_until?: string | null;
+          notebook_page_id?: string | null;
           processed_units?: number;
           source_url?: string | null;
           status?: string;
@@ -284,6 +290,13 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "materials_notebook_page_id_user_id_fkey";
+            columns: ["notebook_page_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "notebook_pages";
+            referencedColumns: ["id", "user_id"];
+          },
           {
             foreignKeyName: "materials_subject_id_user_id_fkey";
             columns: ["subject_id", "user_id"];
@@ -341,6 +354,61 @@ export type Database = {
             columns: ["thread_id", "user_id"];
             isOneToOne: false;
             referencedRelation: "chat_threads";
+            referencedColumns: ["id", "user_id"];
+          },
+        ];
+      };
+      notebook_pages: {
+        Row: {
+          class_date: string;
+          content: NonNullable<Json>;
+          created_at: string;
+          id: string;
+          plain_text: string;
+          subject_id: string;
+          title: string;
+          topic_id: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          class_date?: string;
+          content?: NonNullable<Json>;
+          created_at?: string;
+          id?: string;
+          plain_text?: string;
+          subject_id: string;
+          title?: string;
+          topic_id?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          class_date?: string;
+          content?: NonNullable<Json>;
+          created_at?: string;
+          id?: string;
+          plain_text?: string;
+          subject_id?: string;
+          title?: string;
+          topic_id?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notebook_pages_subject_id_user_id_fkey";
+            columns: ["subject_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "subjects";
+            referencedColumns: ["id", "user_id"];
+          },
+          {
+            foreignKeyName: "notebook_pages_topic_id_user_id_fkey";
+            columns: ["topic_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "topics";
             referencedColumns: ["id", "user_id"];
           },
         ];
@@ -572,6 +640,10 @@ export type Database = {
       ai_spend_since: { Args: { p_since: string }; Returns: number };
       apply_syllabus_import: { Args: { p_import_id: string; p_payload: Json }; Returns: Json };
       clear_subject: { Args: { p_subject_id: string }; Returns: undefined };
+      index_notebook_page: {
+        Args: { p_chunks: Json; p_content_hash: string; p_page_id: string; p_title: string };
+        Returns: string;
+      };
       is_signup_allowed: { Args: { p_email: string }; Returns: boolean };
       match_chunks: {
         Args: { p_match_count?: number; p_query_embedding: string; p_subject_id: string };

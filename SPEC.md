@@ -61,7 +61,7 @@ Principio de diseño: extremadamente fácil e intuitiva. Cualquier acción princ
 - Estilo limpio, minimalista y moderno. Modo claro y oscuro.
 - **Inicio**: próximos exámenes, recomendación del día, tarjetas de materias (color + ícono + % de dominio) y racha.
 - **Menú principal**: Inicio · Quiz · Revisión de tareas · Ajustes (en el celular, barra inferior con el botón de nueva materia al centro).
-- **Materia**: pestañas Temas · Material · Cuaderno · Chat · Evaluaciones; la Fase 3 agrega Estudiar y la Fase 5 Progreso (al pasar de 5 pestañas, Evaluaciones se integra en Temas).
+- **Materia**: pestañas Temas · Material · Chat · Evaluaciones · Cuaderno (el Cuaderno junto a Evaluaciones, como pidió el usuario); la Fase 3 agrega Estudiar y la Fase 5 Progreso (al pasar de 5 pestañas, Evaluaciones se integra en Temas).
 - **Onboarding** de 3 pasos: crear materia → subir sílabo → ver la materia organizada.
 - Estados vacíos que explican qué hacer y con un botón para hacerlo.
 - Mientras la IA procesa, mostrar progreso; las respuestas del chat se muestran en streaming.

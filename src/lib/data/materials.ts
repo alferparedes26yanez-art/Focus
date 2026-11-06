@@ -14,6 +14,8 @@ export async function getSubjectMaterials(subjectId: string): Promise<MaterialVi
     .from("materials")
     .select(LIST_COLUMNS)
     .eq("subject_id", subjectId)
+    // Notebook pages are in the library for the chat, but shown in Cuaderno.
+    .neq("kind", "note")
     .order("created_at", { ascending: true });
   if (error) throw toDataError(error);
   return data as MaterialView[];
@@ -38,7 +40,7 @@ export async function getMaterialDetail(subjectId: string, materialId: string, f
   const { data: material, error } = await supabase
     .from("materials")
     .select(
-      `${LIST_COLUMNS}, storage_bucket, files, subject:subjects(id, name, color), topic:topics(id, title)`,
+      `${LIST_COLUMNS}, storage_bucket, files, notebook_page_id, subject:subjects(id, name, color), topic:topics(id, title)`,
     )
     .eq("id", materialId)
     .eq("subject_id", subjectId)
@@ -84,6 +86,7 @@ export async function getMaterialDetail(subjectId: string, materialId: string, f
     chunks: chunks as ViewerChunk[],
     files: fileUrls,
     window: paged ? { firstPage, lastPage: Math.min(lastPage, totalPages || lastPage), totalPages } : null,
+    notebookPageId: material.notebook_page_id,
   };
 }
 
