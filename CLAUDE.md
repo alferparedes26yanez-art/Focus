@@ -14,6 +14,7 @@ La especificación completa está en `SPEC.md`. Léela antes de empezar o planif
   - `AI_MODEL_EMBEDDING`: modelo de embeddings de Gemini
 - Embeddings: Gemini (mismo `GEMINI_API_KEY`)
 - Lectura de archivos: PDF/Word/PPTX con librerías de parsing; imágenes, fotos de apuntes, audio y video se envían a Gemini (multimodal) para extraer o transcribir el texto
+- Editor del cuaderno: Tiptap (`@tiptap/react` y sus extensiones gratuitas)
 - Mapas conceptuales: React Flow (`@xyflow/react`)
 - Presentaciones: `pptxgenjs`
 - Repetición espaciada: `ts-fsrs`
@@ -51,7 +52,7 @@ La especificación completa está en `SPEC.md`. Léela antes de empezar o planif
 - `npm run db:test` (migraciones + pruebas RLS en un Postgres local) · `npm run db:types` (regenera `src/types/database.ts`)
 
 ## Estado actual
-- Fase actual: 2 (material y chat con citas) terminada en código. Fase 1 funciona en producción. Para la Fase 2 falta aplicar las migraciones 0700 y 0800 en Supabase, cargar `AI_MODEL_FAST` y `AI_MODEL_EMBEDDING` en Vercel y probar el criterio de aceptación con un PDF real.
+- Fase actual: cierre de la Fase 2 (material y chat con citas): migraciones 0700 y 0800 aplicadas en producción; falta la prueba de aceptación con un PDF real y agregar .html, .txt, .md y links a documentos (PDF/Word/PPTX, Google Drive/Docs/Slides). Siguen la Fase 2.5 (Cuaderno) y la Fase 3 (Estudio, con quiz rápido y revisión de tareas). Orden aprobado por el usuario.
 - Notas:
   - Next.js 16 con Cache Components: todo lo que lee sesión, `params` o `searchParams` va dentro de `<Suspense>`. `AGENTS.md` apunta a la documentación de Next incluida en `node_modules/next/dist/docs/`: léela antes de usar una API de Next.
   - Las evaluaciones se vinculan a unidades (`event_units`), no a temas: un tema nuevo en una unidad entra solo en sus exámenes.

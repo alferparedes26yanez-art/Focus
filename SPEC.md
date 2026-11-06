@@ -16,10 +16,16 @@ Principio de diseño: extremadamente fácil e intuitiva. Cualquier acción princ
 - Resultado: estructura Materia → Unidades → Temas, editable (renombrar, reordenar arrastrando, agregar, borrar).
 
 ### 2. Biblioteca de material
-- Subir: PDF, libros, Word, PowerPoint, links web, videos de YouTube (usar transcripción), fotos de apuntes o pizarra (extraer texto) y, en una fase posterior, audios de clase (transcripción).
+- Subir: PDF, libros, Word, PowerPoint, páginas guardadas (.html), texto (.txt, .md), links web, videos de YouTube (usar transcripción), fotos de apuntes o pizarra (extraer texto) y, en una fase posterior, audios de clase (transcripción).
+- Los links que apuntan a un PDF, Word o PowerPoint se descargan y se leen como archivo (con páginas para citar). Los de Google Drive, Docs y Slides compartidos con "cualquier persona con el enlace" se convierten automáticamente; si no son públicos, se explica cómo compartirlos. El material de un aula virtual con contraseña se sube guardando la página (.html).
 - La IA sugiere a qué tema pertenece cada material; el usuario puede corregirlo.
 - Todo el material se divide en fragmentos y se indexa para búsqueda semántica, guardando por fragmento: documento, página/minuto y sección.
 - Estado visible de procesamiento por archivo (subiendo → procesando → listo / error).
+
+### 2b. Cuaderno de apuntes
+- Pestaña Cuaderno en cada materia: páginas de apuntes (una por clase, con fecha y tema opcional) con un editor tipo Word: títulos, negrita, listas, tablas, resaltado e imágenes pegadas o subidas. Se guarda solo.
+- Los apuntes cuentan como material: se indexan para que el chat los cite ("tus apuntes del 5 de noviembre") y, en la Fase 3, sirven para generar quizzes, resúmenes y flashcards.
+- Las fotos de la pizarra pegadas en el cuaderno se leen con IA para poder buscarlas.
 
 ### 3. Asistente IA por materia
 - Chat dentro de cada materia que responde primero con el material subido (RAG).
@@ -35,6 +41,8 @@ Principio de diseño: extremadamente fácil e intuitiva. Cualquier acción princ
 - **Flashcards**: generadas automáticamente por tema, con repetición espaciada (FSRS). Sesión diaria de repaso.
 - **Simulacro de examen**: mezcla los temas que entran en un examen del calendario, con cronómetro y resultado por tema.
 - **Glosario** automático de términos de la materia.
+- **Quiz rápido** desde el menú principal: elegir materia, tema(s), cantidad, tipo y dificultad; usa el mismo motor que el Test. Los intentos se guardan y hay un "Repasar mis errores".
+- **Revisión de tareas** desde el menú principal (y desde un deber del calendario): subir el deber (fotos, PDF o Word), elegir la materia y, si existe, la rúbrica del profesor. La IA actúa como el profesor de la materia y devuelve una nota estimada (aclarando que es estimada), la calificación por criterio, los errores con su ubicación, por qué están mal y cómo corregirlos (con citas del material) y, por párrafo, un ejemplo corregido a pedido. Se puede subir la versión corregida para ver qué mejoró.
 
 ### 5. Presentaciones y mapas conceptuales
 - Presentación de un tema o unidad: elegir número de diapositivas y estilo; vista previa en la app, editable, exportable a PPTX y PDF.
@@ -52,7 +60,8 @@ Principio de diseño: extremadamente fácil e intuitiva. Cualquier acción princ
 ## Diseño y UX
 - Estilo limpio, minimalista y moderno. Modo claro y oscuro.
 - **Inicio**: próximos exámenes, recomendación del día, tarjetas de materias (color + ícono + % de dominio) y racha.
-- **Materia**: pestañas Temas · Material · Chat · Estudiar · Progreso.
+- **Menú principal**: Inicio · Quiz · Revisión de tareas · Ajustes (en el celular, barra inferior con el botón de nueva materia al centro).
+- **Materia**: pestañas Temas · Material · Cuaderno · Chat · Evaluaciones; la Fase 3 agrega Estudiar y la Fase 5 Progreso (al pasar de 5 pestañas, Evaluaciones se integra en Temas).
 - **Onboarding** de 3 pasos: crear materia → subir sílabo → ver la materia organizada.
 - Estados vacíos que explican qué hacer y con un botón para hacerlo.
 - Mientras la IA procesa, mostrar progreso; las respuestas del chat se muestran en streaming.
@@ -67,6 +76,8 @@ Principio de diseño: extremadamente fácil e intuitiva. Cualquier acción princ
 - `materials`: archivos y links (tipo, estado de procesamiento, tema asignado, ruta en Storage)
 - `chunks`: fragmentos de texto con embedding, página/minuto y material de origen
 - `chat_threads`, `messages`: conversaciones y citas de cada respuesta
+- `notebook_pages`: páginas del cuaderno (contenido del editor en JSON, texto plano para indexar, imágenes en Storage)
+- `homework_reviews`: revisiones de tareas (archivos, rúbrica, resultado en JSON, nota estimada, versión)
 - `summaries`, `quizzes`, `quiz_questions`, `quiz_attempts`
 - `flashcards`, `flashcard_reviews`: estado FSRS
 - `presentations`, `concept_maps`: contenido en JSON
@@ -91,9 +102,14 @@ Principio de diseño: extremadamente fácil e intuitiva. Cualquier acción princ
 - Chat por materia con RAG, citas clicables y modos de explicación.
 - ✅ Listo cuando: al preguntar algo que está en un PDF subido, la respuesta cita el documento y la página correctos, y el enlace abre ese punto.
 
+### Fase 2.5 — Cuaderno
+- Cuaderno por materia con editor enriquecido (Tiptap) e imágenes; guardado automático; los apuntes se indexan como material y el chat los cita.
+- ✅ Listo cuando: se puede escribir una página con formato y una imagen pegada, recargar sin perder nada, y preguntar en el chat algo que solo está en esos apuntes y recibir la cita a esa página.
+
 ### Fase 3 — Estudio
 - Resúmenes, tests con corrección explicada, flashcards con FSRS y glosario.
-- ✅ Listo cuando: desde un tema se puede generar un resumen, hacer un test y repasar flashcards, y los resultados quedan guardados.
+- Quiz rápido desde el menú y revisión de tareas con nota estimada, correcciones citadas y ejemplo corregido por párrafo.
+- ✅ Listo cuando: desde un tema se puede generar un resumen, hacer un test y repasar flashcards, y los resultados quedan guardados; y al subir un deber se recibe una revisión con nota estimada, errores ubicados y citas del material.
 
 ### Fase 4 — Presentaciones y mapas
 - Generación, edición y exportación de presentaciones (PPTX/PDF) y mapas conceptuales (PNG/PDF).
